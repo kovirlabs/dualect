@@ -6,7 +6,10 @@
 A ``for`` loop takes one *column* of its iterable per pass. An integer range
 is a Python ``range`` (shifted to 0-based when the loop variable only serves as
 a position, see :func:`dualect.emit.index_variables`); a row vector iterates
-its elements; a matrix iterates ``A.T``; a column or a scalar runs once.
+its elements; a matrix iterates ``A.T`` (``A.T.copy()`` when the body writes
+into the loop variable, since each row of ``A.T`` is a view of ``A``); a column
+or a scalar runs once. A range known to be empty is declined: the source then
+leaves the variable as an empty array, Python leaves it unbound.
 """
 
 import ast
@@ -60,6 +63,14 @@ def translate(stmt: ir.For, ctx: Context) -> list[Line]:
             iterable = ast.List(elts=[expr])
         else:
             ctx.decline("a loop over a value whose shape is unknown")
+    if isinstance(it, ir.Range) and info.numel == 0:
+        # The source leaves the variable as an empty 1x0 array; Python leaves
+        # it unbound.
+        ctx.decline("a loop over a range that is known to be empty")
+    if info.is_matrix and var in ctx.scope.mutated:
+        # Each column of A.T is a view: writing into the loop variable would
+        # change A, while the source works on a copy of the column.
+        iterable = ctx.method(iterable, "copy")
     lines.append(ctx.line(f"for {var} in {ast.unparse(iterable)}:"))
     with ctx.loop(stmt):
         lines.extend(ctx.block(stmt.body))

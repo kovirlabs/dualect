@@ -40,6 +40,9 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy dualect
 
+      - name: Type check the rule translators (mypy)
+        run: uv run python tools/mypy_rules.py
+
   pytest:
     name: pytest (Python ${{ matrix.python-version }}, Octave from apt)
     runs-on: ubuntu-24.04

@@ -24,6 +24,14 @@ pitfalls:
     (`np.arange(1, 4)**-1`); write the exponent as a float (`x**-1.0`) or
     use float data.
   - >-
+    NumPy integers wrap around silently on overflow (`np.array([2, 3])**40`,
+    `2**np.arange(70)`), where the source computes in doubles; an exponent
+    above 2 or a scalar base over an integer array is written as a float
+    (`x**40.0`, `2.0**x`). `2.^x` means `2 .^ x`, not `2. ^ x`.
+  - >-
+    Logical operands are numbers in the source: `m .^ 2` of a mask is 0/1
+    doubles, so the mask is converted (`m.astype(int)`) first.
+  - >-
     A non-integer matrix power `A^0.5` is `scipy.linalg.fractional_matrix_power`,
     not `A**0.5`.
   - >-

@@ -23,6 +23,13 @@ why: >
   an index (then shift the indexing too).
 pitfalls:
   - >-
+    `for c in A.T` gives views of `A`: `c[0] = 0` in the body changes `A`,
+    while the source modified a copy of the column. Iterate `A.T.copy()`
+    when the body writes into the loop variable.
+  - >-
+    After `for k = 1:0` the source leaves `k` as an empty 1x0 array; Python
+    never binds `k`.
+  - >-
     Looping over a column vector `for v = [1; 2; 3]` runs *once*, with `v` the
     whole column; iterating a 1-D NumPy array runs three times.
   - >-

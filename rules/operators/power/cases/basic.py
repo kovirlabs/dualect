@@ -7,5 +7,5 @@ Q = A**2
 n = -(2**2)
 h = 2**-1
 x = np.array([1, 2, 3])
-y = 2**x
+y = 2.0**x  # a float base: 2**x on integers wraps around for x >= 63
 r = x**-1.0  # a float exponent: integer arrays reject negative integer powers

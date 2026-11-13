@@ -375,7 +375,23 @@ class Context:
             return self.hole(stmt, report)
         saved_imports = set(self.imports)
         saved_directives = set(self.directives)
+        # Nested statements record their own assumptions; a compound statement's
+        # note must only carry what was assumed for its own header.
+        outer_assumptions = self.assumptions
         self.assumptions = []
+        try:
+            return self._translate_planned(stmt, report, saved_imports, saved_directives)
+        finally:
+            self.assumptions = outer_assumptions
+
+    def _translate_planned(
+        self,
+        stmt: ir.Stmt,
+        report: StmtReport,
+        saved_imports: set[str],
+        saved_directives: set[str],
+    ) -> list[Line]:
+        """Translate a statement whose plan allows it; a decline turns it into a hole."""
         mark = len(self.reports)
         try:
             lines = self.translate_statement(stmt)

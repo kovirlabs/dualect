@@ -8,7 +8,9 @@ Most names map to their NumPy function; the renamed ones are listed in
 halves away from zero, written out from ``np.sign`` and ``np.floor``.
 ``sqrt``/``log`` of a value not known to be non-negative is assumed to be in
 the real domain (docs/design.md section 5.2): NumPy returns NaN where the
-source returns a complex number, and verification catches that.
+source returns a complex number, and verification catches that. ``mod(x, 0)``
+and ``rem(x, 0)`` are ``x`` in the source but 0 or NaN in NumPy, so a zero
+divisor is declined and an unknown one assumed nonzero, out loud.
 """
 
 import ast
@@ -50,6 +52,13 @@ def translate(node: ir.Call, ctx: Context) -> ast.expr:
         return ctx.call(ast.Name("abs"), ctx.expr(node.args[0]))
     if name not in _SAME and name not in _NUMPY:
         ctx.decline(f"function {name}")
+    if name in ("mod", "rem") and len(node.args) == 2:
+        divisor = ctx.info(node.args[1]).value
+        if divisor == 0:
+            # mod(x, 0) and rem(x, 0) are x in the source; NumPy gives 0 or NaN.
+            ctx.decline(f"{name} by zero")
+        if divisor is None:
+            ctx.assume(f"nonzero divisor in {name}")
     if name in _DOMAIN and not first.nonneg:
         ctx.assume(f"{name} argument in the real domain")
     args = [ctx.arg(arg) for arg in node.args]

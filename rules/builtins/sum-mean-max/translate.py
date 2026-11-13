@@ -9,7 +9,9 @@ is ``A.sum()``. ``max``/``min`` skip NaN, so data not known to be NaN-free uses
 ``np.nanmax``/``np.nanmin``; the two-argument form is ``np.maximum`` (or
 ``np.fmax``, which also skips NaN), and ``min(max(x, lo), hi)`` is
 ``np.clip(x, lo, hi)``. The position output of ``[m, i] = max(v)`` is
-``np.argmax``, 0-based when the emitter stores ``i`` 0-based.
+``np.argmax``, 0-based when the emitter stores ``i`` 0-based. ``prod`` of
+an integer array is taken in floating point (``dtype=float``): NumPy integers
+wrap around on overflow where the source computes in doubles.
 """
 
 import ast
@@ -49,13 +51,15 @@ def _reduce(func: str, data: ir.Expr, info: Info, dim: int | None, ctx: Context)
     """``func`` of ``data`` over ``dim`` (``None``: the default dimension)."""
     expr = ctx.expr(data)
     nan_name = _NAN_SKIPPING.get(func) if not info.finite else None
+    # A product of integers wraps around in NumPy; the source multiplies doubles.
+    keywords = {"dtype": ast.Name("float")} if func == "prod" and info.int_dtype else {}
     if info.is_matrix:
         axis = 0 if dim in (None, 1) else 1 if dim == 2 else None
         if axis is None:
             ctx.decline(f"{func} along dimension {dim}")
         if nan_name:
             return ctx.call(ctx.np(nan_name), expr, axis=ast.Constant(axis))
-        return ctx.method(expr, func, axis=ast.Constant(axis))
+        return ctx.method(expr, func, axis=ast.Constant(axis), **keywords)
     reduces = (
         dim is None or (dim == 2 and info.kind is Kind.ROW) or (dim == 1 and info.kind is Kind.COL)
     )
@@ -64,7 +68,7 @@ def _reduce(func: str, data: ir.Expr, info: Info, dim: int | None, ctx: Context)
             return ctx.call(ctx.np("count_nonzero"), expr)
         if nan_name:
             return ctx.call(ctx.np(nan_name), expr)
-        return ctx.method(expr, func)
+        return ctx.method(expr, func, **keywords)
     ctx.decline(f"{func} of a value whose shape is unknown or along a singleton dimension")
 
 
@@ -90,6 +94,8 @@ def translate(node: ir.Call, ctx: Context) -> ast.expr:
         nan_name = _NAN_SKIPPING.get(func) if not info.finite else None
         if nan_name:
             return ctx.call(ctx.np(nan_name), ctx.expr(whole))
+        if func == "prod" and info.int_dtype:
+            return ctx.method(ctx.expr(whole), func, dtype=ast.Name("float"))
         return ctx.method(ctx.expr(whole), func)
     return _reduce(func, data, ctx.info(data), dim, ctx)
 
@@ -135,6 +141,7 @@ def translate_multi(stmt: ir.Assign, ctx: Context) -> list[Line]:
         else:
             lines.append(ctx.line(f"{position_name} = {ast.unparse(position)} + 1"))
     if isinstance(value_target, ir.Name):
+        value: ast.expr
         if stored_zero_based and position_name is not None:
             value = ast.Subscript(value=expr, slice=ast.Name(position_name))
         else:

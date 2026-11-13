@@ -247,6 +247,26 @@ join of the argument facts at its call sites in the file.
   `do ... until` is declined; indexing an array of unknown shape assumes a
   vector, and a product of unknown shapes assumes `@`, each with an `assumed`
   comment that verification then checks.
+- **Hardening (settled after milestone 4 by adversarial probes,
+  `tests/test_adversarial.py`).** A local function is analysed once for the
+  join of its call sites, and so is a lambda: its body is annotated with the
+  join of every call's argument facts, never the last call's. A row at one
+  call and a column at another join to a vector of *unknown orientation*, and
+  products, element-wise operations against a row/column, `size` and
+  concatenation of such a vector are declined rather than assumed (each call
+  needs a different `@`/broadcast). Logical operands are numbers in the source
+  but NumPy keeps `bool + bool` as `bool`, so arithmetic on two logical
+  operands converts the left one (`m.astype(int) + m`). NumPy integers wrap
+  around where the source computes in doubles: `.^` on an integer array with
+  an exponent above 2 or unknown is computed in floats (`x**40.0`, `2.0**x`),
+  and `prod` of integers takes `dtype=float`. `mod`/`rem` by a known zero are
+  declined (the source returns `x`), by an unknown divisor assumed nonzero.
+  `for c = A` iterates `A.T.copy()` when the body writes into `c` (rows of
+  `A.T` are views), and a loop over a range known to be empty is declined
+  (the source leaves the variable as a `1x0` array). The normalizer turns
+  `2.^x` into `2 .^x`: the grammar read it as the number `2.` and a matrix
+  power. Horizontal concatenation of columns and matrices is
+  `np.column_stack`.
 - **Output.** ruff formats the file (its default style, so the result does not
   depend on the caller's configuration). The first line states the verdict:
   `verified against the .m source`, or `UNVERIFIED: <reason>` (holes, no

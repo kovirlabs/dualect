@@ -22,6 +22,9 @@ why: >
   occurrence on ties).
 pitfalls:
   - >-
+    `prod` of a NumPy integer array wraps around on overflow
+    (`np.prod([10**5] * 4)` is negative); write `x.prod(dtype=float)`.
+  - >-
     On a row vector `sum(v)` sums along the row (the first non-singleton
     dimension); for a 1-D array `v.sum()` is right.
   - >-

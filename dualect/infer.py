@@ -376,6 +376,9 @@ class _Inferrer:
             s.name: s for s in program.body if isinstance(s, ir.FunctionDef)
         }
         self.call_sites: dict[str, list[list[Info]]] = {}
+        # id(lambda) -> its parameters' facts joined over every call so far in
+        # this round (see :meth:`call`).
+        self.lambda_params: dict[int, list[Info]] = {}
         self.current_function: ir.FunctionDef | None = None
 
     # --- driver --------------------------------------------------------------
@@ -389,6 +392,7 @@ class _Inferrer:
         # facts of its callers; repeat so facts flow through call chains.
         for _round in range(3):
             self.call_sites = {}
+            self.lambda_params = {}
             self.body(self.program.body, {})
             for name, fdef in self.defs.items():
                 self.function(name, fdef)
@@ -838,8 +842,23 @@ class _Inferrer:
             handle = env.get(name, UNKNOWN)
             lam = handle.func
             if lam is not None and len(lam.params) == len(args):
-                inner = {**(handle.env or {}), **dict(zip(lam.params, args, strict=True))}
-                return self.expr(lam.body, inner)
+                captured = handle.env or {}
+                # This call's result follows this call's arguments...
+                result = self.expr(
+                    lam.body, {**captured, **dict(zip(lam.params, args, strict=True))}
+                )
+                # ...but the lambda is translated once, so its body is annotated
+                # with the facts that hold for *every* call: a lambda called
+                # with a column and with a row has a vector of unknown
+                # orientation, and its translators must decline or assume out
+                # loud rather than follow whichever call came last.
+                seen = self.lambda_params.get(id(lam))
+                joined = (
+                    args if seen is None else [join(a, b) for a, b in zip(seen, args, strict=True)]
+                )
+                self.lambda_params[id(lam)] = joined
+                self.expr(lam.body, {**captured, **dict(zip(lam.params, joined, strict=True))})
+                return result
             return UNKNOWN
         if not node.args and name in CONSTANTS:
             return CONSTANTS[name]

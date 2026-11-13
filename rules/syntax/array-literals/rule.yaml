@@ -24,6 +24,9 @@ why: >
   of two rows is `np.vstack((a, b))`.
 pitfalls:
   - >-
+    `[b, b]` of two columns is `np.column_stack((b, b))`, an Nx2 matrix;
+    `np.concatenate` of the 1-D vectors would give one long vector.
+  - >-
     `[1 -2]` is two elements but `[1 - 2]` is one: inside brackets, a space
     before a sign that is not followed by a space starts a new element.
   - >-

@@ -79,6 +79,7 @@ uv run pytest             # tests (Octave-dependent tests skip if Octave is abse
 uv run pytest -m 'not octave'   # only the tests that need no Octave
 uv run ruff check . && uv run ruff format .
 uv run mypy dualect
+uv run python tools/mypy_rules.py   # mypy over rules/**/translate.py
 ```
 
 Octave is needed for execution tests (`brew install octave` on macOS).

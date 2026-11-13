@@ -20,6 +20,14 @@ why: >
   combined with a row is the same in both; with a column it needs the axis too.
 pitfalls:
   - >-
+    NumPy keeps `bool + bool` as bool (a logical OR) and `-mask` raises; the
+    source treats logical values as numbers, so `m + m` is
+    `m.astype(int) + m` and `t + t` of two logical scalars is `int(t) + t`.
+  - >-
+    A vector whose orientation differs between uses (a function called with a
+    row and with a column) broadcasts differently in each; such an
+    element-wise operation is declined.
+  - >-
     Two 1-D arrays of equal length add element by element, so translating
     `c + r` (column plus row) as `c + r` is silently wrong when the lengths
     happen to match.

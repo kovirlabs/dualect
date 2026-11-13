@@ -6,7 +6,9 @@
 Vectors become 1-D arrays (a row and a column alike), matrices nested lists,
 a one-element literal its element, and ``[]`` an empty 1-D array. Elements
 that are arrays are concatenated: a row of vectors and scalars with
-``np.concatenate``, rows of equally long rows with ``np.vstack``.
+``np.concatenate``, columns and matrices side by side with
+``np.column_stack`` (a 1-D vector is taken as a column there), rows of equally
+long rows with ``np.vstack``.
 """
 
 import ast
@@ -50,7 +52,12 @@ def _concatenate(node: ir.Matrix, infos: list[list], ctx: Context) -> ast.expr:
         if all(info.kind in (Kind.ROW, Kind.SCALAR, Kind.EMPTY) for info in infos[0]):
             parts = [_part(item, ctx) for item in rows[0]]
             return ctx.call(ctx.np("concatenate"), ast.Tuple(elts=parts))
-        ctx.decline("horizontal concatenation of columns or matrices")
+        kinds = {info.kind for info in infos[0]}
+        if kinds <= {Kind.COL, Kind.MATRIX}:
+            # 1-D vectors have no orientation; column_stack reads them as columns.
+            parts = [ctx.expr(item) for item in rows[0]]
+            return ctx.call(ctx.np("column_stack"), ast.Tuple(elts=parts))
+        ctx.decline("horizontal concatenation mixing columns with rows or scalars")
     if all(len(row) == 1 for row in rows):
         kinds = {info.kind for row in infos for info in row}
         if kinds <= {Kind.COL, Kind.SCALAR, Kind.EMPTY}:

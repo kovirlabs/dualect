@@ -18,6 +18,10 @@ why: >
   same size multiply element-wise without any error, giving wrong numbers.
 pitfalls:
   - >-
+    A function or lambda called once with a row and once with a column has a
+    vector of unknown orientation: `u * v` is inner for one call and outer for
+    the other, so no single `@` is right and the statement is declined.
+  - >-
     With 1-D arrays there is no row/column: `u * v'` (inner product of rows)
     is `u @ v`, and `u' * v` (outer product) is `np.outer(u, v)`.
   - >-

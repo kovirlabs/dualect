@@ -135,6 +135,10 @@ class _Writer:
         return len(self.chars)
 
 
+#: Characters that make ``.`` the start of a dotted operator after a number.
+_DOT_OPS = frozenset({"^", "*", "/", "\\", "'"})
+
+
 def _line_col(source: str, offset: int) -> tuple[int, int]:
     """1-based line and column of an offset in ``source``."""
     line = source.count("\n", 0, offset) + 1
@@ -367,6 +371,16 @@ def normalize(source: str) -> NormalizedSource:
             aug_ops[out.offset] = _AUG_OPS[char]
             out.put("=", i + 1)
             i += 2
+            statement_start = False
+            continue
+
+        # `2.^x` is `2 .^ x` in both dialects (the lexer prefers the dotted
+        # operator), but the grammar reads the number `2.` and then `^`, a
+        # matrix power. A space keeps the dotted operator whole.
+        if char.isdigit() and source.startswith(".", i + 1) and source[i + 2 : i + 3] in _DOT_OPS:
+            out.put(char, i)
+            out.insert(" ", i + 1)
+            i += 1
             statement_start = False
             continue
 

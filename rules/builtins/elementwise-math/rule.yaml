@@ -48,6 +48,10 @@ why: >
   dividend (`np.fmod`). On a plain scalar, Python's built-in `abs` is enough.
 pitfalls:
   - >-
+    `mod(x, 0)` and `rem(x, 0)` return `x`; `np.mod(x, 0)` is 0 (integers) or
+    NaN (floats). A zero divisor is not translated; an unknown one is assumed
+    nonzero, out loud.
+  - >-
     `round` rounds halves away from zero (`round(2.5)` is 3); `np.round` and
     Python's `round` round halves to even (2). Use
     `np.sign(x) * np.floor(np.abs(x) + 0.5)`.

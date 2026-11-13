@@ -7,7 +7,10 @@
 scalar, and otherwise the matrix product ``@``, with the 1-D cases spelled out:
 row times column is the inner product ``u @ v``, column times row the outer
 product ``np.outer(u, v)``. With an operand of unknown shape the product is
-assumed to be a matrix product (docs/design.md section 5.2).
+assumed to be a matrix product (docs/design.md section 5.2); a vector whose
+orientation is not known (row at one call site, column at another) is declined,
+since the product means an inner product for one and an outer for the other.
+Two logical operands are multiplied as numbers (see operators/arithmetic).
 """
 
 import ast
@@ -21,11 +24,13 @@ def translate(node: ir.BinOp, ctx: Context) -> ast.expr:
     """One multiplication."""
     left, right = ctx.info(node.left), ctx.info(node.right)
     if node.op == "times":
-        a, b = ctx.module("operators/arithmetic").expand(node, ctx)
-        return ast.BinOp(left=a, op=ast.Mult(), right=b)
+        arithmetic = ctx.module("operators/arithmetic")
+        a, b = arithmetic.expand(node, ctx)
+        return ast.BinOp(left=arithmetic.numeric(a, left, right, ctx), op=ast.Mult(), right=b)
     if node.op != "mtimes":
         ctx.decline(f"operator {node.op}")
     a, b = ctx.expr(node.left), ctx.expr(node.right)
+    a = ctx.module("operators/arithmetic").numeric(a, left, right, ctx)
     if left.is_scalar or right.is_scalar:
         return ast.BinOp(left=a, op=ast.Mult(), right=b)
     if left.kind is Kind.COL and right.kind is Kind.ROW:
@@ -37,5 +42,10 @@ def translate(node: ir.BinOp, ctx: Context) -> ast.expr:
         return ast.BinOp(left=a, op=ast.MatMult(), right=b)
     if left.kind is Kind.STRING or right.kind is Kind.STRING:
         ctx.decline("multiplying char arrays")
+    if Kind.VECTOR in (left.kind, right.kind):
+        # A vector whose orientation differs between uses (a function called
+        # with a row and with a column): `u * v` is an inner product for one
+        # and an outer product for the other, and `@` can only be one of them.
+        ctx.decline("a product with a vector whose orientation is not known")
     ctx.assume("matrix multiply")
     return ast.BinOp(left=a, op=ast.MatMult(), right=b)
