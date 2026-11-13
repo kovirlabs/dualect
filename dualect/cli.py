@@ -5,8 +5,8 @@
 
 ::
 
-    dualect scan script.m                  # milestone 3
-    dualect context script.m               # milestone 3
+    dualect scan script.m [--json]         # which rules does this file need?
+    dualect context script.m               # LLM-ready context for those rules
     dualect translate script.m -o out.py   # milestone 4
     dualect verify script.m script.py      # run both, compare
     dualect rules list [--status guided]
@@ -24,10 +24,13 @@ from pathlib import Path
 
 from dualect import __version__
 from dualect.compare import DEFAULT_ATOL, DEFAULT_RTOL, Tolerance
+from dualect.context import build_context
+from dualect.dialect import parse_dialect
 from dualect.errors import DualectError
 from dualect.paths import default_rules_dir
 from dualect.rulebook import Status, load_rules
 from dualect.scaffold import new_rule
+from dualect.scan import ScanResult, scan_file
 from dualect.verify import options_for_pair, verify_pair
 
 EXIT_OK = 0
@@ -36,8 +39,6 @@ EXIT_NOT_IMPLEMENTED = 3
 
 #: Commands that parse their arguments but are built in a later milestone.
 _PLANNED = {
-    "scan": "milestone 3 (scanner + context command)",
-    "context": "milestone 3 (scanner + context command)",
     "translate": "milestone 4 (deterministic translators)",
 }
 
@@ -50,6 +51,25 @@ def _not_implemented(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     return EXIT_NOT_IMPLEMENTED
+
+
+def _scan_source(args: argparse.Namespace) -> ScanResult:
+    """Scan the file named on the command line with the chosen rules and dialect."""
+    rules = load_rules(rules_dir=args.rules_dir)
+    return scan_file(path=args.source, rules=rules, dialect=parse_dialect(args.dialect))
+
+
+def _scan(args: argparse.Namespace) -> int:
+    """Handle ``dualect scan``."""
+    result = _scan_source(args)
+    print(result.to_json() if args.json else result.report())
+    return EXIT_OK
+
+
+def _context(args: argparse.Namespace) -> int:
+    """Handle ``dualect context``."""
+    print(build_context(result=_scan_source(args)), end="")
+    return EXIT_OK
 
 
 def _verify(args: argparse.Namespace) -> int:
@@ -99,15 +119,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"dualect {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
-    scan = commands.add_parser("scan", help="list the rules a file needs (not implemented yet)")
-    scan.add_argument("source", type=Path)
-    scan.set_defaults(handler=_not_implemented)
+    def add_source_options(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("source", type=Path, help="the .m file")
+        sub.add_argument(
+            "--dialect", help="source dialect and version, e.g. octave or matlab@R2023a"
+        )
+        sub.add_argument("--rules-dir", type=Path, default=None, help=argparse.SUPPRESS)
 
-    context = commands.add_parser(
-        "context", help="print LLM-ready context for a file (not implemented yet)"
-    )
-    context.add_argument("source", type=Path)
-    context.set_defaults(handler=_not_implemented)
+    scan = commands.add_parser("scan", help="list the rules a file needs, and what has none")
+    add_source_options(scan)
+    scan.add_argument("--json", action="store_true", help="machine-readable output")
+    scan.set_defaults(handler=_scan)
+
+    context = commands.add_parser("context", help="print LLM-ready context for a file's rules")
+    add_source_options(context)
+    context.set_defaults(handler=_context)
 
     translate = commands.add_parser("translate", help="translate a file (not implemented yet)")
     translate.add_argument("source", type=Path)
@@ -157,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     :param argv: arguments without the program name (default: ``sys.argv[1:]``).
     """
     args = build_parser().parse_args(argv)
-    if getattr(args, "rules_dir", None) is None and args.command == "rules":
+    if hasattr(args, "rules_dir") and args.rules_dir is None:
         args.rules_dir = default_rules_dir()
     try:
         return int(args.handler(args))

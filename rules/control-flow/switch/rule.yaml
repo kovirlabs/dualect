@@ -2,6 +2,7 @@ id: control-flow/switch
 title: "`switch` / `case` / `otherwise`"
 status: guided
 dialects: [octave, matlab]
+match: [stmt:switch]
 octave: |
   switch method
     case 'linear'

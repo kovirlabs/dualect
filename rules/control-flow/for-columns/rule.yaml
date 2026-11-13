@@ -2,6 +2,7 @@ id: control-flow/for-columns
 title: "`for` loops iterate over columns"
 status: guided
 dialects: [octave, matlab]
+match: [stmt:for]
 octave: |
   for c = A           % c is each column of A
     total = total + c;

@@ -2,6 +2,7 @@ id: builtins/find
 title: "`find`: 1-based, column-major indices"
 status: guided
 dialects: [octave, matlab]
+match: [call:find]
 octave: |
   idx = find(x > 2);          % 1-based
   first = find(x > 2, 1);

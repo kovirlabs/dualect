@@ -2,6 +2,7 @@ id: control-flow/if-elseif
 title: "`if` / `elseif` / `else` and array conditions"
 status: guided
 dialects: [octave, matlab]
+match: [stmt:if]
 octave: |
   if x > 0
     s = 1;

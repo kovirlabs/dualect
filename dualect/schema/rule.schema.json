@@ -5,7 +5,16 @@
   "description": "One translation rule: rules/<category>/<rule-id>/rule.yaml. See docs/design.md section 4.2.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "title", "status", "dialects", "octave", "python", "why"],
+  "required": [
+    "id",
+    "title",
+    "status",
+    "dialects",
+    "match",
+    "octave",
+    "python",
+    "why"
+  ],
   "properties": {
     "id": {
       "description": "<category>/<rule-id>; must match the folder the file lives in.",
@@ -18,17 +27,40 @@
     },
     "status": {
       "description": "Lifecycle stage: unsupported -> guided -> mechanical.",
-      "enum": ["unsupported", "guided", "mechanical"]
+      "enum": [
+        "unsupported",
+        "guided",
+        "mechanical"
+      ]
     },
     "dialects": {
       "description": "Source dialects the rule applies to.",
       "type": "array",
-      "items": {"enum": ["octave", "matlab"]},
+      "items": {
+        "enum": [
+          "octave",
+          "matlab"
+        ]
+      },
       "minItems": 1,
       "uniqueItems": true
     },
-    "since": {"$ref": "#/$defs/versionBound"},
-    "until": {"$ref": "#/$defs/versionBound"},
+    "match": {
+      "description": "Construct tags this rule covers (vocabulary in dualect/constructs.py); the scanner maps every use of these tags to this rule.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+:[A-Za-z0-9_.-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "since": {
+      "$ref": "#/$defs/versionBound"
+    },
+    "until": {
+      "$ref": "#/$defs/versionBound"
+    },
     "octave": {
       "description": "The .m form, as a short snippet.",
       "type": "string",
@@ -46,17 +78,25 @@
     },
     "pitfalls": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1}
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "related": {
       "type": "array",
-      "items": {"$ref": "#/$defs/ruleId"},
+      "items": {
+        "$ref": "#/$defs/ruleId"
+      },
       "uniqueItems": true
     },
     "python_imports": {
       "description": "Import lines the Python form needs, e.g. 'import numpy as np'.",
       "type": "array",
-      "items": {"type": "string", "minLength": 1},
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "uniqueItems": true
     },
     "tolerance": {
@@ -65,8 +105,14 @@
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "rtol": {"type": "number", "minimum": 0},
-        "atol": {"type": "number", "minimum": 0}
+        "rtol": {
+          "type": "number",
+          "minimum": 0
+        },
+        "atol": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     }
   },
@@ -78,14 +124,22 @@
     "versionBound": {
       "description": "Per-dialect version (inclusive for since, exclusive for until), or null for unbounded.",
       "oneOf": [
-        {"type": "null"},
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "additionalProperties": false,
           "minProperties": 1,
           "properties": {
-            "octave": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)*$"},
-            "matlab": {"type": "string", "pattern": "^R[0-9]{4}[ab]$"}
+            "octave": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)*$"
+            },
+            "matlab": {
+              "type": "string",
+              "pattern": "^R[0-9]{4}[ab]$"
+            }
           }
         }
       ]

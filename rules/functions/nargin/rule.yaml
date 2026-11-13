@@ -2,6 +2,7 @@ id: functions/nargin
 title: "Optional arguments with `nargin`"
 status: guided
 dialects: [octave, matlab]
+match: [func:nargin]
 octave: |
   function y = scale(x, factor)
     if nargin < 2

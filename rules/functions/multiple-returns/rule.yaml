@@ -2,6 +2,7 @@ id: functions/multiple-returns
 title: "Multiple return values and `nargout`"
 status: guided
 dialects: [octave, matlab]
+match: [func:multi-output, func:nargout, assign:multi, assign:ignore-output]
 octave: |
   function [s, p] = sum_prod(x)
     s = sum(x);

@@ -16,6 +16,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from dualect.constructs import is_known_tag
 from dualect.errors import RuleError
 from dualect.paths import schema_path
 from dualect.rulebook import (
@@ -76,6 +77,10 @@ def validate_rule_dir(*, rule_dir: Path) -> list[str]:
     for stem in sorted(py_stems - m_stems):
         problems.append(f"cases/{stem}.py has no matching cases/{stem}.m")
 
+    for tag in data.get("match") or []:
+        if isinstance(tag, str) and not is_known_tag(tag):
+            problems.append(f"match: unknown construct tag {tag!r} (see dualect/constructs.py)")
+
     status = data.get("status")
     has_cases = bool(find_cases(rule_dir=rule_dir))
     if status in (Status.GUIDED, Status.MECHANICAL) and not has_cases:
@@ -95,6 +100,7 @@ def validate_all(*, rules_dir: Path) -> list[str]:
     dirs = rule_dirs(rules_dir=rules_dir)
     problems: list[str] = []
     known_ids = {rule_id_for(rule_dir=path) for path in dirs}
+    owners: dict[str, str] = {}
     for rule_dir in dirs:
         problems.extend(validate_rule_dir(rule_dir=rule_dir))
         rule_id = rule_id_for(rule_dir=rule_dir)
@@ -102,9 +108,30 @@ def validate_all(*, rules_dir: Path) -> list[str]:
             related = read_rule_yaml(path=rule_dir / "rule.yaml").get("related") or []
         except RuleError:
             continue  # already reported by validate_rule_dir
+        problems.extend(_claim_tags(rule_dir=rule_dir, rule_id=rule_id, owners=owners))
         for other in related:
             if other not in known_ids:
                 problems.append(f"{rule_id}: related rule {other!r} does not exist")
             elif other == rule_id:
                 problems.append(f"{rule_id}: lists itself in related")
+    return problems
+
+
+def _claim_tags(*, rule_dir: Path, rule_id: str, owners: dict[str, str]) -> list[str]:
+    """Record the tags a rule matches; two unversioned rules may not share one.
+
+    Variant rules (docs/design.md section 4.4) may share a tag when at least one
+    of them is bounded by ``since``/``until``; the dialect filter then decides.
+    """
+    try:
+        data = read_rule_yaml(path=rule_dir / "rule.yaml")
+    except RuleError:
+        return []
+    if data.get("since") or data.get("until"):
+        return []
+    problems = []
+    for tag in data.get("match") or []:
+        other = owners.setdefault(str(tag), rule_id)
+        if other != rule_id:
+            problems.append(f"{rule_id}: tag {tag!r} is already matched by {other}")
     return problems

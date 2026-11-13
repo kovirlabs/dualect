@@ -2,6 +2,7 @@ id: operators/not-equal
 title: "`~=` / `!=` and logical NOT `~` / `!`"
 status: guided
 dialects: [octave, matlab]
+match: [op:ne, op:not]
 octave: |
   d = a ~= b;
   d = a != b;         % Octave only

@@ -2,6 +2,7 @@ id: operators/power
 title: "`^` (matrix power) vs `.^` (element-wise power)"
 status: guided
 dialects: [octave, matlab]
+match: [op:mpower, op:power]
 octave: |
   P = A ^ 2;          % A * A
   Q = A .^ 2;         % element-wise

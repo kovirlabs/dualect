@@ -14,15 +14,21 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Milestones 1 (skeleton) and 2 (first rules) are done; next is milestone 3
-(scanner + `context` command) in docs/design.md section 11.
+Milestones 1-3 are done; next is milestone 4 (deterministic translators,
+`dualect translate`, the combination corpus) in docs/design.md section 11.
 
-- `rules/` — 26 rules in 6 categories, all `guided` (no `translate.py` yet),
-  37 `.m`/`.py` case pairs. `.m` cases must run on Octave 8 (CI, apt) and 11
-  (local); `.py` cases are ruff-formatted idiomatic NumPy.
-
-- `dualect/cli.py` — the `dualect` command. `verify` and `rules list|new` work;
-  `scan`, `context`, `translate` exit 3 with "not implemented yet".
+- `rules/` — 35 rules in 8 categories, all `guided` (no `translate.py` yet),
+  each `.m`/`.py` case pair executed in both languages. Each `rule.yaml` lists
+  the construct tags it covers in `match`. `.m` cases must run on Octave 8 (CI,
+  apt) and 11 (local); `.py` cases are ruff-formatted idiomatic NumPy.
+- `dualect/cli.py` — the `dualect` command. `scan`, `context`, `verify` and
+  `rules list|new` work; `translate` exits 3 with "not implemented yet".
+- Parsing and scanning: `dualect/source.py` rewrites Octave-only syntax so the
+  MATLAB-only tree-sitter grammar reads it; `dualect/parse.py` parses;
+  `dualect/lower.py` lowers to the shared IR (`dualect/ir.py`), rebuilding
+  operator precedence the grammar gets wrong; `dualect/infer.py` infers shapes;
+  `dualect/constructs.py` tags constructs; `dualect/scan.py` maps tags to rules;
+  `dualect/context.py` prints LLM context. Design notes: docs/design.md 5.3.
 - `dualect/rulebook.py` loads rules; `dualect/validate.py` checks them against
   `dualect/schema/rule.schema.json` plus folder conventions; `dualect/scaffold.py`
   creates new rule folders (with `TODO` markers the tests reject).
@@ -30,8 +36,8 @@ Milestones 1 (skeleton) and 2 (first rules) are done; next is milestone 3
   `dualect/compare.py` decides value equality; `dualect/verify.py` ties them
   together. Semantics are in docs/design.md section 12.1.
 - `tests/` — `test_rules.py` validates every rule and executes every case pair
-  (`@pytest.mark.octave`, skipped without Octave); `tests/data/beam.*` is the
-  hand-written harness pair.
+  (`@pytest.mark.octave`, skipped without Octave); `test_scan.py` covers
+  parsing, the Octave dialect, precedence, scanning and context.
 - CI: `.github/workflows/tests.yml` (Ubuntu apt Octave, `DUALECT_REQUIRE_OCTAVE=1`).
 
 ## Core ideas to preserve

@@ -78,6 +78,11 @@ class Rule:
             raise RuleError(f"{self.id}: unknown status {self.data.get('status')!r}") from exc
 
     @property
+    def match(self) -> tuple[str, ...]:
+        """Construct tags this rule covers (see :mod:`dualect.constructs`)."""
+        return tuple(str(tag) for tag in self.data.get("match") or ())
+
+    @property
     def has_translator(self) -> bool:
         """Whether the folder contains a deterministic ``translate.py``."""
         return (self.path / TRANSLATOR_FILE).is_file()

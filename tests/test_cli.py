@@ -14,9 +14,7 @@ from dualect.rulebook import load_rule
 from dualect.validate import validate_rule_dir
 
 
-@pytest.mark.parametrize(
-    "argv", [["scan", "a.m"], ["context", "a.m"], ["translate", "a.m", "-o", "a.py"]]
-)
+@pytest.mark.parametrize("argv", [["translate", "a.m", "-o", "a.py"]])
 def test_planned_commands_say_not_implemented(
     argv: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:

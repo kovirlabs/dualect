@@ -2,6 +2,7 @@ id: indexing/colon-all
 title: "`A(:)`: all elements as one column"
 status: guided
 dialects: [octave, matlab]
+match: [index:colon-all]
 octave: |
   v = A(:);           % column, column-major
   A(:) = 0;

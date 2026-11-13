@@ -2,6 +2,7 @@ id: operators/short-circuit
 title: "`&&`/`||` (short-circuit) vs `&`/`|` (element-wise)"
 status: guided
 dialects: [octave, matlab]
+match: [op:andand, op:oror, op:and, op:or, call:xor]
 octave: |
   if n > 0 && x(n) > 1, ... end
   ok = a > 0 | b > 0;     % element-wise

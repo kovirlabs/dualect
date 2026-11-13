@@ -76,6 +76,7 @@ id: indexing/end-in-index
 title: "`end` inside an index expression"
 status: mechanical            # mechanical | guided | unsupported
 dialects: [octave, matlab]
+match: [index:end]            # construct tags this rule covers (section 5.3)
 since: {octave: "3.0", matlab: "R2006a"}   # optional version range
 until: null
 octave: |
@@ -168,6 +169,47 @@ matrix or matrix × matrix?). Strategy, in order:
 2. Emit the safe form plus a `# dualect: assumed matrix multiply` comment.
 3. Let verification catch the wrong guess.
 
+Step 1 is `dualect/infer.py`: a flow-sensitive analysis over the IR that records,
+for every expression, its shape class (scalar, row, column, matrix, empty, ...),
+known dimensions, element type (real, complex, logical, char) and whether it is
+known to be finite, non-negative or integer-valued. Branches are joined, loops
+iterated to a fixed point, and each local function is analysed once for the
+join of the argument facts at its call sites in the file.
+
+### 5.3 Parsing, construct tags and scanning (settled in milestone 3)
+
+- **Octave dialect.** `tree-sitter-matlab` knows only MATLAB syntax. Given
+  Octave's extensions it reports errors (`#` comments, `#{ #}` blocks, `!=`,
+  `!x`, `+=`) or, worse, misreads them silently (`do` and `until` parse as
+  command syntax, `n++` as `n + (+ <missing>)`). `dualect/source.py` rewrites
+  them, outside strings and comments, into forms the grammar reads (`#` -> `%`,
+  `!=` -> `~=`, `endfunction` -> `end` + spaces, `do`/`until` -> marker
+  `while`/assignment pairs, `x += e` and `x++` with the operator kept in a side
+  table) and records each use, so `--dialect matlab` can reject them. No newline
+  is added or removed and positions are mapped back to the original text.
+- **Precedence.** The grammar nests some operator chains wrongly (`-2 ^ 2` as
+  `(-2) ^ 2`, `a == b & c` as `a == (b & c)`, `a.^b'` as `a.^(b')`). The
+  lowering flattens every operator chain and rebuilds it with the documented
+  precedence (`2^-2^2` is `(2^-2)^2`, checked against Octave 11).
+- **Names.** `f(x)` is an index when `f` is assigned anywhere in the enclosing
+  function or script (or is a parameter/output), otherwise a call.
+- **Construct tags.** The scanner tags each statement with what it uses:
+  `op:mtimes`, `index:end`, `call:linspace`, `assign:grow`, ... (the vocabulary
+  is `dualect/constructs.py`). Each `rule.yaml` lists the tags it covers in
+  `match`, so a new built-in is a new folder with `match: [call:foo]` and no
+  engine change. Two unversioned rules may not claim the same tag. Some tags
+  need inferred facts: `index:logical` (a logical subscript) and `assign:grow`
+  (a subscript of `end+k` or a constant beyond the known size, or a variable
+  that is undefined or `[]`). A subscript that is merely *unknown* is not a
+  grow: NumPy raises `IndexError` there, so a wrong guess is loud.
+- **Gaps are named.** A tag no rule matches is reported as unsupported under
+  that tag (`call:strsplit`, `expr:field`, `stmt:try`); text the parser could
+  not read is `parse:error`; Octave-only syntax under `--dialect matlab` is
+  `dialect:octave-only`.
+- **Context.** `dualect context` prints a two-line header (the rules, and the
+  constructs with no rule) followed by each needed rule's `rule.yaml` and up to
+  two cases (`basic` first), as Markdown. Nothing else.
+
 ## 6. LLM integration
 
 The repo is the LLM's memory: models do not retain anything between tasks, so the
@@ -202,7 +244,7 @@ marked so they skip cleanly on machines without it.
 ## 8. CLI
 
 ```bash
-dualect scan script.m                  # which rules does this file need?
+dualect scan script.m [--json]         # which rules does this file need?
 dualect context script.m               # LLM-ready context for those rules
 dualect translate script.m -o script.py [--strict] [--dialect matlab@R2023a]
 dualect verify script.m script.py      # run both, compare
@@ -210,8 +252,9 @@ dualect rules list [--status guided]   # coverage at a glance
 dualect rules new indexing/foo         # scaffold a rule folder
 ```
 
-`scan`, `context` and `translate` parse their arguments but exit with code 3
-and a "not implemented yet" message until their milestone lands.
+`translate` parses its arguments but exits with code 3 and a "not implemented
+yet" message until milestone 4 lands. `scan` and `context` take `--dialect`;
+`scan --json` gives machine-readable output.
 
 ## 9. Tech stack
 
@@ -245,7 +288,12 @@ good seed for `builtins/*` rules (link, don't copy).
    - control-flow: `for` over matrix columns, `while`, `if/elseif`, `switch`
    - functions: definition, multiple returns, `nargin`
    - builtins: `zeros/ones/eye`, `linspace`, `size/numel/length`, `sum/mean/max`, `find`
-3. **Scanner + context command** (the LLM path works end to end).
+3. **Scanner + context command** (done: section 5.3; 35 rules after adding
+   `syntax/array-literals`, `types/char-strings`, `operators/arithmetic`,
+   `operators/division`, `operators/augmented-assignment`,
+   `builtins/elementwise-math`, `builtins/constants`, `builtins/isempty` and
+   `io/display`, which the scanner showed every real file needs). The IR, the
+   lowering and shape inference landed here because the scanner walks the IR.
 4. **Deterministic translators** for the mechanical subset; combination corpus.
 5. **Python → Octave** for the same subset via the shared IR.
 6. **MCP server**, promotion-loop tooling, `llms.txt`.
@@ -290,3 +338,5 @@ How `dualect verify a.m a.py` and the rule-case tests decide two scripts agree:
   directives are errors, so a typo cannot silently weaken a check.
 - `.m` case scripts that define functions start with `1;` and define them before
   use: Octave does not accept functions at the end of a script.
+- A case file must not be named like a function it calls (`round.m`): the
+  harness runs it from its own folder, where it would shadow the built-in.

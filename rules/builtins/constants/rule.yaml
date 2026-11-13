@@ -1,0 +1,28 @@
+id: builtins/constants
+title: "Constants: `pi`, `Inf`, `NaN`, `eps`, `true`, `false`, `i`"
+status: guided
+dialects: [octave, matlab]
+match: [call:pi, call:e, call:Inf, call:inf, call:NaN, call:nan, call:eps, call:true, call:false, call:i, call:j]
+octave: |
+  c = 2 * pi * r;
+  m = NaN;
+  ok = true;
+python: |
+  c = 2 * np.pi * r
+  m = np.nan
+  ok = True
+why: >
+  These are functions in `.m` code that take no arguments; in Python they are
+  module constants (`np.pi`, `np.inf`, `np.nan`) or keywords (`True`, `False`).
+  `eps` is the spacing of doubles at 1, `np.finfo(float).eps`. The imaginary
+  unit `i` (or `j`) is `1j`.
+pitfalls:
+  - >-
+    `i`, `j` and `e` are often loop variables or data; a variable of that name
+    hides the constant, and then it is just a variable.
+  - >-
+    `NaN == NaN` is false in both languages; test with `isnan` / `np.isnan`.
+  - >-
+    `eps(x)` with an argument is the spacing at `x`: `np.spacing(x)`.
+related: [builtins/elementwise-math]
+python_imports: [import numpy as np]

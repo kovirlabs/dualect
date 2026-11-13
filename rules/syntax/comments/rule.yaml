@@ -2,6 +2,7 @@ id: syntax/comments
 title: "Comments: `%`, `#`, and `%{ ... %}` blocks"
 status: guided
 dialects: [octave, matlab]
+match: [syntax:comment, syntax:hash-comment, syntax:block-comment]
 octave: |
   x = 1;  % trailing comment
   # line comment (Octave only)

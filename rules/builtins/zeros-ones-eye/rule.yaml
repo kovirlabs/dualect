@@ -2,6 +2,7 @@ id: builtins/zeros-ones-eye
 title: "`zeros`, `ones`, `eye`"
 status: guided
 dialects: [octave, matlab]
+match: [call:zeros, call:ones, call:eye]
 octave: |
   Z = zeros(3);       % 3x3!
   W = ones(2, 4);

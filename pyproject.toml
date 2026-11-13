@@ -27,6 +27,10 @@ dependencies = [
     # Runs .m code from Python; used by `dualect verify` and the rule-case tests.
     "oct2py>=5.8",
     "pyyaml>=6.0",
+    # Parses .m source (docs/design.md section 9). The grammar knows only the
+    # MATLAB dialect; dualect/source.py rewrites Octave syntax in front of it.
+    "tree-sitter>=0.24",
+    "tree-sitter-matlab>=1.3.3,<2",
 ]
 
 [project.scripts]

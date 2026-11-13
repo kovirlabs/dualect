@@ -24,6 +24,7 @@ id: {rule_id}
 title: "{PLACEHOLDER}: short title for {rule_id}"
 status: unsupported           # unsupported | guided | mechanical
 dialects: [octave, matlab]
+match: [call:{PLACEHOLDER}]    # construct tags, see dualect/constructs.py
 octave: |
   % {PLACEHOLDER}: the .m form
 python: |

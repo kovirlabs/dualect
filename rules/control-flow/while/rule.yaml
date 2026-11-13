@@ -2,6 +2,7 @@ id: control-flow/while
 title: "`while` loops and Octave's `do ... until`"
 status: guided
 dialects: [octave, matlab]
+match: [stmt:while, stmt:do-until, stmt:break, stmt:continue]
 octave: |
   while err > tol
     ...

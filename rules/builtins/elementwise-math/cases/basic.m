@@ -1,0 +1,13 @@
+x = [-2.5 -1 0 1.5 4];
+a = abs(x);
+r = sqrt(abs(x));
+e = exp(-x);
+f = floor(x);
+c = ceil(x);
+t = fix(x);           % toward zero
+m = mod(-7, 3);       % 2: the sign of the divisor
+k = rem(-7, 3);       % -1: the sign of the dividend
+s = sin(pi * x);
+nan_mask = isnan([1 NaN 3]);
+h = abs(-3);          % a scalar
+ang = atan2(1, -1);

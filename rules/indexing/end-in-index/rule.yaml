@@ -2,6 +2,7 @@ id: indexing/end-in-index
 title: "`end` inside an index expression"
 status: guided
 dialects: [octave, matlab]
+match: [index:end]
 octave: |
   last = x(end);
   tail = x(end-2:end);

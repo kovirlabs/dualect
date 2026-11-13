@@ -3,9 +3,9 @@
 Translate numeric code between Octave/MATLAB-style `.m` files and Python/NumPy,
 in both directions, with every translation **verified by running both sides**.
 
-> **Status: early.** `dualect verify`, the rule tooling and the first 26 rules (Octave →
-> Python, all `guided`, every case verified in both languages) work; scanning and
-> translating are not built yet. See [docs/design.md](docs/design.md) section 11.
+> **Status: early.** `dualect verify`, `scan`, `context`, the rule tooling and 35 rules
+> (Octave → Python, every case verified in both languages) work; translating is not
+> built yet. See [docs/design.md](docs/design.md) section 11.
 
 ## Why
 
@@ -22,6 +22,8 @@ result is executed and compared.
 
 ```bash
 uv sync --all-groups                      # install (Python 3.11+, uv)
+uv run dualect scan script.m              # which rules does this file need? what has none?
+uv run dualect context script.m           # those rules as LLM-ready prompt context
 uv run dualect verify script.m script.py  # run both sides, compare every variable
 uv run dualect rules list [--status guided]
 uv run dualect rules new indexing/foo     # scaffold a rule folder
@@ -33,10 +35,11 @@ uv run pytest                             # validate rules, execute every case p
 Planned, not built yet:
 
 ```bash
-dualect scan script.m                     # which rules does this file need?
-dualect context script.m                  # LLM-ready context for those rules
 dualect translate script.m -o script.py   # translate (scripted + LLM-guided)
 ```
+
+`scan` and `context` read Octave syntax (`#` comments, `!=`, `++`, `+=`,
+`do ... until`, `endfunction`); `--dialect matlab` reports it as Octave-only.
 
 ## License
 

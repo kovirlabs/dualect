@@ -2,6 +2,7 @@ id: functions/definition
 title: "Function definitions and argument copy semantics"
 status: guided
 dialects: [octave, matlab]
+match: [func:definition, func:handle, func:call-local, func:call-handle, stmt:return, syntax:script-marker]
 octave: |
   function y = area(r)
     y = pi * r.^2;

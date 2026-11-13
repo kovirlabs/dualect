@@ -2,6 +2,7 @@ id: builtins/size-numel-length
 title: "`size`, `numel`, `length`"
 status: guided
 dialects: [octave, matlab]
+match: [call:size, call:numel, call:length]
 octave: |
   [r, c] = size(A);
   r = size(A, 1);

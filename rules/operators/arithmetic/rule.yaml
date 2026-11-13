@@ -1,0 +1,32 @@
+id: operators/arithmetic
+title: "`+`, `-`, comparisons and implicit expansion"
+status: guided
+dialects: [octave, matlab]
+match: [op:plus, op:minus, op:uminus, op:uplus, op:eq, op:lt, op:le, op:gt, op:ge]
+octave: |
+  s = a + b;
+  big = v > 1;
+  grid = c + r;       % column + row: a matrix
+python: |
+  s = a + b
+  big = v > 1
+  grid = c[:, np.newaxis] + r
+why: >
+  Addition, subtraction, negation and comparisons are element-wise in both
+  languages, and a scalar combines with every element. Both also expand
+  singleton dimensions (implicit expansion, MATLAB R2016b+ and Octave): a
+  column plus a row gives a matrix. With 1-D NumPy vectors there is no column,
+  so the column side needs an explicit axis: `c[:, np.newaxis] + r`. A matrix
+  combined with a row is the same in both; with a column it needs the axis too.
+pitfalls:
+  - >-
+    Two 1-D arrays of equal length add element by element, so translating
+    `c + r` (column plus row) as `c + r` is silently wrong when the lengths
+    happen to match.
+  - >-
+    Comparisons give logical arrays (`bool` in NumPy); see indexing/logical for
+    using them as masks.
+  - >-
+    `a == b` on char arrays compares characters; see types/char-strings.
+related: [operators/matrix-multiply, syntax/array-literals, operators/division]
+python_imports: [import numpy as np]

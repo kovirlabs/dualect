@@ -2,6 +2,7 @@ id: indexing/logical
 title: "Logical (mask) indexing"
 status: guided
 dialects: [octave, matlab]
+match: [index:logical, index:delete]
 octave: |
   big = x(x > 2);
   x(x < 0) = 0;

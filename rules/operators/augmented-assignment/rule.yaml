@@ -1,0 +1,27 @@
+id: operators/augmented-assignment
+title: "`x += e`, `x++` and friends (Octave only)"
+status: guided
+dialects: [octave]
+match: [op:augassign]
+octave: |
+  n++;
+  k += 2;
+  v += 1;             % v is an array
+python: |
+  n += 1
+  k += 2
+  v = v + 1
+why: >
+  Octave accepts `+=`, `-=`, `*=`, `/=` and the statements `x++` / `x--`;
+  MATLAB has none of them. On numbers they are Python's augmented assignment.
+  On a NumPy array `v += 1` changes the array in place, which also changes
+  every other name bound to it; Octave's copy semantics never do, so write
+  `v = v + 1` unless the array is known to be unshared.
+pitfalls:
+  - >-
+    `*=` and `/=` are the matrix operators: `A *= B` is `A = A * B` (a matrix
+    product), see operators/matrix-multiply.
+  - >-
+    `x++` inside an expression (`y = x++`) is not supported by Octave either.
+related: [operators/arithmetic, control-flow/while]
+python_imports: [import numpy as np]

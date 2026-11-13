@@ -2,6 +2,7 @@ id: operators/transpose
 title: "`'` (conjugate transpose) vs `.'` (transpose)"
 status: guided
 dialects: [octave, matlab]
+match: [op:ctranspose, op:transpose]
 octave: |
   Ah = A';            % conjugate transpose
   At = A.';           % plain transpose

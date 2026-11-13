@@ -2,6 +2,7 @@ id: syntax/line-continuation
 title: "Line continuation with `...`"
 status: guided
 dialects: [octave, matlab]
+match: [syntax:continuation]
 octave: |
   total = a + b + ...
           c;

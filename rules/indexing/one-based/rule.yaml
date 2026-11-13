@@ -2,6 +2,7 @@ id: indexing/one-based
 title: "One-based indexing and column-major linear indices"
 status: guided
 dialects: [octave, matlab]
+match: [index:paren, index:colon]
 octave: |
   first = x(1);
   a23 = A(2, 3);

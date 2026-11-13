@@ -1,0 +1,10 @@
+v = [1 2 3];
+c = [4; 5; 6];      % a column is 1-D in NumPy too
+A = [1 2; 3 4];
+e = [];
+neg = [1 -2];       % two elements
+one = [1 - 2];      % one element: -1
+w = [v 4];          % concatenation, not nesting
+x = 2;
+row = [x, 2*x, x^2];
+B = [v; v];         % two rows stacked: 2x3

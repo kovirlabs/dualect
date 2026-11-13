@@ -2,6 +2,7 @@ id: builtins/linspace
 title: "`linspace` default count and edge cases"
 status: guided
 dialects: [octave, matlab]
+match: [call:linspace]
 octave: |
   x = linspace(0, 1, 5);
   y = linspace(0, 1);       % 100 points

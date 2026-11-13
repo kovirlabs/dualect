@@ -2,6 +2,7 @@ id: indexing/grow-on-assign
 title: "Growing an array by assigning past its end"
 status: guided
 dialects: [octave, matlab]
+match: [assign:grow]
 octave: |
   x(end+1) = v;
   y(5) = 1;           % pads with zeros
