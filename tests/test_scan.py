@@ -150,6 +150,8 @@ def test_semantic_tags_use_inferred_facts() -> None:
     assert {"index:logical", "assign:grow"} <= tags
     # An in-range element assignment does not grow the array.
     assert "assign:grow" not in _tags("x = zeros(1, 3);\nx(2) = 5;\n")
+    # A loop's later iterations must not make an undefined array look defined.
+    assert "assign:grow" in _tags("for i = 1:3\n  A(i) = i;\nend\n")
 
 
 def test_matlab_dialect_rejects_octave_only_syntax() -> None:

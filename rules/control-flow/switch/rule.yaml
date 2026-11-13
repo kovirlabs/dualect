@@ -1,6 +1,6 @@
 id: control-flow/switch
 title: "`switch` / `case` / `otherwise`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [stmt:switch]
 octave: |

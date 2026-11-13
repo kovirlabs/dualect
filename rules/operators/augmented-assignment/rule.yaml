@@ -1,6 +1,6 @@
 id: operators/augmented-assignment
 title: "`x += e`, `x++` and friends (Octave only)"
-status: guided
+status: mechanical
 dialects: [octave]
 match: [op:augassign]
 octave: |

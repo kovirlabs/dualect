@@ -8,18 +8,10 @@ from pathlib import Path
 import pytest
 from conftest import DATA_DIR, RULES_DIR
 
-from dualect.cli import EXIT_FAILED, EXIT_NOT_IMPLEMENTED, EXIT_OK, main
+from dualect.cli import EXIT_FAILED, EXIT_OK, main
 from dualect.paths import RULES_DIR_ENV, default_rules_dir
 from dualect.rulebook import load_rule
 from dualect.validate import validate_rule_dir
-
-
-@pytest.mark.parametrize("argv", [["translate", "a.m", "-o", "a.py"]])
-def test_planned_commands_say_not_implemented(
-    argv: list[str], capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert main(argv) == EXIT_NOT_IMPLEMENTED
-    assert "not implemented yet" in capsys.readouterr().err
 
 
 def test_rules_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -34,15 +26,17 @@ def test_rules_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
 def test_rules_list_repository(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["rules", "--rules-dir", str(RULES_DIR), "list", "--status", "guided"]) == EXIT_OK
     out = capsys.readouterr().out
-    assert "indexing/end-in-index" in out
-    assert "builtins/find" in out
+    assert "indexing/grow-on-assign" in out
+    assert "builtins/find" not in out
 
 
 def test_rules_list_status_filter(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["rules", "--rules-dir", str(RULES_DIR), "list", "--status", "mechanical"]) == 0
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert "no rules found" in captured.err
+    out = capsys.readouterr().out
+    assert "indexing/end-in-index" in out
+    assert "indexing/grow-on-assign" not in out
+    assert main(["rules", "--rules-dir", str(RULES_DIR), "list", "--status", "unsupported"]) == 0
+    assert "no rules found" in capsys.readouterr().err
 
 
 def test_default_rules_dir_is_the_repository(monkeypatch: pytest.MonkeyPatch) -> None:

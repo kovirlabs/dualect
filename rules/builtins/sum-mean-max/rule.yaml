@@ -1,6 +1,6 @@
 id: builtins/sum-mean-max
 title: "`sum`, `mean`, `max`, `min`: dimensions and index outputs"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:sum, call:mean, call:max, call:min, call:prod]
 octave: |

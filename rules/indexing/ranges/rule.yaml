@@ -1,6 +1,6 @@
 id: indexing/ranges
 title: "Colon ranges `a:b` and `a:step:b`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [expr:range]
 octave: |

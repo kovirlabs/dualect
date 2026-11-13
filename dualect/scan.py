@@ -58,6 +58,13 @@ class RuleIndex:
         """The rule covering ``tag``, or ``None``."""
         return self.by_tag.get(tag)
 
+    def rule_by_id(self, rule_id: str) -> Rule | None:
+        """An applicable rule by id, or ``None`` (absent, or not for this dialect)."""
+        for rule in self.by_tag.values():
+            if rule.id == rule_id:
+                return rule
+        return None
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -95,11 +102,13 @@ class ScanResult:
     :param findings: every construct use, in source order.
     :param uses_by_stmt: ``id(stmt)`` -> the findings of that statement itself.
     :param features: Octave-only syntax found by the normalizer.
+    :param program_text: the source text.
     """
 
     source_name: str
     program: ir.Program
     analysis: Analysis
+    program_text: str = ""
     findings: list[Finding] = field(default_factory=list)
     uses_by_stmt: dict[int, list[Finding]] = field(default_factory=dict)
     features: list[OctaveFeature] = field(default_factory=list)
@@ -196,7 +205,11 @@ def scan_text(*, text: str, name: str, index: RuleIndex) -> ScanResult:
     program = lower_parsed(parsed=parsed, name=name, dialect=index.dialect.name)
     analysis = analyze(program)
     result = ScanResult(
-        source_name=name, program=program, analysis=analysis, features=parsed.source.features
+        source_name=name,
+        program=program,
+        analysis=analysis,
+        features=parsed.source.features,
+        program_text=text,
     )
     for stmt in ir.walk_stmts(program.body):
         found = [

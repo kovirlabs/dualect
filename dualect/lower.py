@@ -194,28 +194,33 @@ class _Lowerer:
             if child.type in ("comment", "line_continuation"):
                 if child.type == "line_continuation":
                     continue
-                text = self.text(child)
                 loc = self.loc(child)
-                tags = ["syntax:hash-comment"] if self._is_hash(child) else []
-                if body and loc.line == last_line and not isinstance(body[-1], ir.Comment):
-                    previous = body[-1]
-                    remark = _comment_text(text)
-                    previous.comment = (
-                        remark if previous.comment is None else f"{previous.comment}; {remark}"
+                # The grammar merges consecutive comment lines (and a following
+                # %{ ... %} block) into one node; split it back into pieces.
+                for first, piece in enumerate(_comment_pieces(self.text(child))):
+                    line_offset, is_block, text, span = piece
+                    line = loc.line + line_offset
+                    tags = ["syntax:hash-comment"] if self._is_hash_line(line) else []
+                    if (
+                        first == 0
+                        and body
+                        and line == last_line
+                        and not isinstance(body[-1], ir.Comment)
+                        and not is_block
+                    ):
+                        previous = body[-1]
+                        previous.comment = (
+                            text if previous.comment is None else f"{previous.comment}; {text}"
+                        )
+                        previous.syntax.extend(["syntax:comment", *tags])
+                        continue
+                    piece_loc = ir.Loc(line, 1 if line_offset else loc.col, line + span - 1, 1)
+                    comment = ir.Comment(loc=piece_loc, text=text, block=is_block)
+                    comment.syntax.extend(
+                        ["syntax:block-comment" if is_block else "syntax:comment", *tags]
                     )
-                    previous.syntax.extend(["syntax:comment", *tags])
-                    continue
-                block = text.startswith("%{")
-                comment = ir.Comment(
-                    loc=loc,
-                    text=_block_text(text) if block else _comment_text(text),
-                    block=block,
-                )
-                comment.syntax.extend(
-                    ["syntax:block-comment" if block else "syntax:comment", *tags]
-                )
-                body.append(comment)
-                last_line = loc.end_line
+                    body.append(comment)
+                    last_line = line + span - 1
                 continue
             if not child.is_named:
                 continue
@@ -227,8 +232,16 @@ class _Lowerer:
                 last_line = self.loc(child).end_line
         return body
 
-    def _is_hash(self, node: TSNode) -> bool:
-        return self.parsed.original_text(node).lstrip().startswith("#")
+    def _is_hash_line(self, line: int) -> bool:
+        """Whether a comment on this original line starts with ``#``."""
+        lines = self.parsed.source.original.splitlines()
+        if not 1 <= line <= len(lines):
+            return False
+        text = lines[line - 1]
+        stripped = text.lstrip()
+        if stripped.startswith("#"):
+            return True
+        return "#" in text and "%" not in text
 
     def statement(self, node: TSNode, *, display: bool) -> list[ir.Stmt]:
         """Lower one statement node; may return several (or none)."""
@@ -767,10 +780,27 @@ def _comment_text(text: str) -> str:
     return body[1:] if body.startswith(" ") else body
 
 
-def _block_text(text: str) -> str:
-    """The lines between ``%{`` and ``%}``, dedented."""
-    lines = text.splitlines()[1:-1]
-    return "\n".join(line.strip() for line in lines)
+def _comment_pieces(text: str) -> list[tuple[int, bool, str, int]]:
+    """Split a comment node into ``(line offset, is block, text, line count)`` pieces."""
+    lines = text.split("\n")
+    pieces: list[tuple[int, bool, str, int]] = []
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped == "%{":
+            depth, end = 1, index + 1
+            while end < len(lines) and depth:
+                marker = lines[end].strip()
+                depth += 1 if marker == "%{" else -1 if marker == "%}" else 0
+                end += 1
+            inner = [line.strip() for line in lines[index + 1 : end - 1]]
+            pieces.append((index, True, "\n".join(inner), end - index))
+            index = end
+            continue
+        if stripped:
+            pieces.append((index, False, _comment_text(stripped), 1))
+        index += 1
+    return pieces
 
 
 def lower_source(*, text: str, name: str = "<source>", dialect: str = "octave") -> ir.Program:

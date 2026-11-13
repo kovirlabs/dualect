@@ -1,6 +1,6 @@
 id: syntax/line-continuation
 title: "Line continuation with `...`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [syntax:continuation]
 octave: |

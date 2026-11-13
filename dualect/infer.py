@@ -72,6 +72,11 @@ class Info:
     :param nonneg: known to contain no negative value.
     :param integer: known to hold integer values only.
     :param value: the exact value of a scalar, when known (constant folding).
+    :param int_dtype: the *NumPy translation* may hold an integer dtype. Source
+        numbers are doubles, but idiomatic NumPy writes ``np.array([1, 2])``;
+        storing a fraction into such an array would truncate silently, so
+        translators check this before an element assignment.
+    :param maybe_undefined: on some path the variable was never assigned.
     :param func: for a function handle, the lambda it holds (if known).
     :param env: for a lambda, the variables it captured.
     """
@@ -84,6 +89,8 @@ class Info:
     nonneg: bool = False
     integer: bool = False
     value: float | complex | None = None
+    int_dtype: bool = False
+    maybe_undefined: bool = False
     func: ir.Lambda | None = field(default=None, compare=False)
     env: dict[str, Info] | None = field(default=None, compare=False, repr=False)
 
@@ -228,6 +235,8 @@ def join(a: Info, b: Info) -> Info:
         nonneg=a.nonneg and b.nonneg,
         integer=a.integer and b.integer,
         value=a.value if a.value == b.value else None,
+        int_dtype=a.int_dtype or b.int_dtype,
+        maybe_undefined=a.maybe_undefined or b.maybe_undefined,
         func=a.func if a.func is b.func else None,
         env=a.env if a.func is b.func else None,
     )
@@ -237,8 +246,9 @@ Env = dict[str, Info]
 
 
 def join_envs(a: Env, b: Env) -> Env:
-    """Join two variable environments; a name missing on one side is unknown."""
-    return {name: join(a.get(name, UNKNOWN), b.get(name, UNKNOWN)) for name in a.keys() | b.keys()}
+    """Join two variable environments; a name missing on one side may be undefined."""
+    missing = Info(maybe_undefined=True)
+    return {name: join(a.get(name, missing), b.get(name, missing)) for name in a.keys() | b.keys()}
 
 
 # --- built-in return facts -------------------------------------------------
@@ -510,9 +520,9 @@ class _Inferrer:
             "integer": info.integer,
         }
         if info.kind in (Kind.ROW, Kind.SCALAR):
-            return scalar(**base)
+            return replace(scalar(**base), int_dtype=info.int_dtype)
         if info.kind in (Kind.COL, Kind.MATRIX):
-            return array(info.rows, 1, **base)
+            return replace(array(info.rows, 1, **base), int_dtype=info.int_dtype)
         return UNKNOWN
 
     def assign(self, stmt: ir.Assign, env: Env) -> Env:
@@ -599,7 +609,8 @@ class _Inferrer:
             case ir.Num(value=value):
                 if isinstance(value, complex):
                     return scalar(elem=Elem.COMPLEX, value=value)
-                return scalar(nonneg=value >= 0, integer=float(value).is_integer(), value=value)
+                literal = scalar(nonneg=value >= 0, integer=float(value).is_integer(), value=value)
+                return replace(literal, int_dtype=isinstance(value, int))
             case ir.Str(value=value):
                 return Info(kind=Kind.STRING, rows=1, cols=len(value), elem=Elem.CHAR)
             case ir.Name(id=name):
@@ -631,9 +642,12 @@ class _Inferrer:
                 kind = {Kind.ROW: Kind.COL, Kind.COL: Kind.ROW}.get(inner.kind, inner.kind)
                 return replace(inner, kind=kind, rows=inner.cols, cols=inner.rows)
             case ir.Index():
-                return self.index(node, env)
+                result = self.index(node, env)
+                target = self.analysis.info(node.target)
+                return replace(result, int_dtype=target.int_dtype)
             case ir.Call():
-                return self.call(node, env, nargout=nargout)
+                result = self.call(node, env, nargout=nargout)
+                return replace(result, int_dtype=self.int_result(node, result))
             case ir.Lambda():
                 return Info(kind=Kind.FUNC, func=node, env=dict(env))
             case ir.FuncRef():
@@ -646,7 +660,7 @@ class _Inferrer:
         step = self.expr(node.step, env) if node.step is not None else scalar(integer=True, value=1)
         count = range_count(start.value, step.value, stop.value)
         finite = start.finite and stop.finite and step.finite
-        return array(
+        info = array(
             1,
             count,
             finite=finite,
@@ -654,6 +668,8 @@ class _Inferrer:
             integer=start.integer and step.integer,
             kind=Kind.ROW if count != 1 else Kind.SCALAR,
         )
+        # An integer range translates to np.arange / range(), which hold ints.
+        return replace(info, int_dtype=start.integer and step.integer)
 
     def matrix(self, rows: list[list[ir.Expr]], env: Env) -> Info:
         if not rows:
@@ -699,7 +715,7 @@ class _Inferrer:
         info = array(height, width, **facts)
         if info.kind is Kind.SCALAR and len(flat) == 1:
             return replace(flat[0], func=None)
-        return info
+        return replace(info, int_dtype=all(i.int_dtype for i in flat))
 
     def binop(self, op: str, a: Info, b: Info) -> Info:
         if op in ir.COMPARISONS or op in ("and", "or"):
@@ -738,6 +754,9 @@ class _Inferrer:
             integer = a.integer and b.integer and b.nonneg
             finite = a.finite and b.finite and b.nonneg and b.integer
         value = _fold(op, a, b) if a.is_scalar and b.is_scalar else None
+        keeps_ints = op in ("plus", "minus", "times", "mtimes") or (
+            op in ("power", "mpower") and b.integer and b.nonneg
+        )
         return replace(
             shape,
             elem=elem,
@@ -745,6 +764,7 @@ class _Inferrer:
             nonneg=nonneg,
             integer=integer,
             value=value,
+            int_dtype=keeps_ints and a.int_dtype and b.int_dtype,
             func=None,
         )
 
@@ -829,18 +849,25 @@ class _Inferrer:
         if name in ("zeros", "ones", "eye", "rand", "randn"):
             return self.constructor(name, node.args, args)
         if name == "linspace":
-            count: int | None = 100
+            points: int | None = 100
             if len(args) >= 3:
-                count = int(args[2].value) if isinstance(args[2].value, int | float) else None
+                points = int(args[2].value) if isinstance(args[2].value, int | float) else None
             finite = all(a.finite for a in args[:2])
-            if count == 1:
+            if points == 1:
                 return scalar(finite=finite)
-            return array(1, count, finite=finite, kind=Kind.ROW)
+            return array(1, points, finite=finite, kind=Kind.ROW)
         if name in ("numel", "length", "ndims", "columns", "rows"):
-            return scalar(nonneg=True, integer=True)
+            count: int | None = None
+            if name == "numel":
+                count = first.numel
+            elif name == "length" and first.rows is not None and first.cols is not None:
+                count = max(first.rows, first.cols) if first.numel else 0
+            return scalar(nonneg=True, integer=True, value=count)
         if name == "size":
             if len(args) >= 2:
-                return scalar(nonneg=True, integer=True)
+                axis = args[1].value
+                extent = first.rows if axis == 1 else first.cols if axis == 2 else None
+                return scalar(nonneg=True, integer=True, value=extent)
             return array(1, 2, finite=True, nonneg=True, integer=True)
         if name in ("isempty", "strcmp", "strcmpi", "isscalar", "isvector", "any", "all"):
             if name in ("any", "all") and first.is_matrix:
@@ -889,6 +916,16 @@ class _Inferrer:
             return replace(first, value=None, func=None)
         return UNKNOWN
 
+    def int_result(self, node: ir.Call, result: Info) -> bool:
+        """Whether the NumPy translation of a call may hold integers."""
+        if node.local or node.handle:
+            return result.int_dtype
+        if node.func in ("find", "size", "numel", "length", "ndims", "nargin", "nargout"):
+            return True
+        if node.func in ("sum", "max", "min", "prod", "abs", "sign", "cumsum", "sort"):
+            return any(self.analysis.info(arg).int_dtype for arg in node.args[:2])
+        return False
+
     def constructor(self, name: str, nodes: list[ir.Expr], args: list[Info]) -> Info:
         dims: list[int | None] = []
         if len(args) == 1 and args[0].kind is Kind.ROW and args[0].cols == 2:
@@ -911,7 +948,12 @@ class _Inferrer:
         facts: _Facts = {"finite": True, "nonneg": name != "randn", "integer": name != "rand"}
         if name in ("rand", "randn"):
             facts["integer"] = False
-        return array(dims[0], dims[1] if len(dims) > 1 else None, **facts)
+        rows, cols = dims[0], dims[1] if len(dims) > 1 else None
+        if rows != 1 and cols != 1 and not (len(args) == 1 and dims == [None, None]):
+            # zeros(m, n) with neither size known to be 1 is written as a 2-D
+            # array, so it is a matrix from here on.
+            return array(rows, cols, kind=Kind.MATRIX, **facts)
+        return array(rows, cols, **facts)
 
     def reduction(self, name: str, nodes: list[ir.Expr], args: list[Info]) -> Info:
         if not args:

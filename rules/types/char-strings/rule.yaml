@@ -1,6 +1,6 @@
 id: types/char-strings
 title: "Char arrays `'...'` and double-quoted strings"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [literal:string, literal:dq-string, expr:string-concat, call:strcmp]
 octave: |

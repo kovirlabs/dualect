@@ -14,30 +14,38 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Milestones 1-3 are done; next is milestone 4 (deterministic translators,
-`dualect translate`, the combination corpus) in docs/design.md section 11.
+Milestones 1-4 are done; next is milestone 5 (Python -> Octave via the shared
+IR) in docs/design.md section 11.
 
-- `rules/` — 35 rules in 8 categories, all `guided` (no `translate.py` yet),
-  each `.m`/`.py` case pair executed in both languages. Each `rule.yaml` lists
+- `rules/` — 35 rules in 8 categories; 30 are `mechanical` (a `translate.py`
+  whose output equals every case's hand-written `.py` and verifies against
+  Octave), 5 `guided` (reasons in design.md section 11). Each `rule.yaml` lists
   the construct tags it covers in `match`. `.m` cases must run on Octave 8 (CI,
   apt) and 11 (local); `.py` cases are ruff-formatted idiomatic NumPy.
-- `dualect/cli.py` — the `dualect` command. `scan`, `context`, `verify` and
-  `rules list|new` work; `translate` exits 3 with "not implemented yet".
-- Parsing and scanning: `dualect/source.py` rewrites Octave-only syntax so the
-  MATLAB-only tree-sitter grammar reads it; `dualect/parse.py` parses;
-  `dualect/lower.py` lowers to the shared IR (`dualect/ir.py`), rebuilding
-  operator precedence the grammar gets wrong; `dualect/infer.py` infers shapes;
+- `corpus/` — realistic multi-construct scripts run through the whole pipeline.
+- `dualect/cli.py` — `scan`, `context`, `translate`, `verify`, `rules list|new`.
+- Front end: `dualect/source.py` rewrites Octave-only syntax so the MATLAB-only
+  tree-sitter grammar reads it; `dualect/parse.py` parses; `dualect/lower.py`
+  lowers to the shared IR (`dualect/ir.py`), rebuilding operator precedence the
+  grammar gets wrong; `dualect/infer.py` infers shapes and types;
   `dualect/constructs.py` tags constructs; `dualect/scan.py` maps tags to rules;
-  `dualect/context.py` prints LLM context. Design notes: docs/design.md 5.3.
+  `dualect/context.py` prints LLM context. Design notes: design.md 5.3.
+- Back end: `dualect/emit.py` plans each statement (all rules mechanical, or a
+  reported hole), dispatches to the rules' translators
+  (`dualect/translators.py`) and owns copy semantics and 0-based position
+  variables; `dualect/pipeline.py` formats (ruff), writes, verifies and
+  reports; `dualect/pyformat.py` also does the layer-2 comparison. Design
+  notes: design.md 5.4.
 - `dualect/rulebook.py` loads rules; `dualect/validate.py` checks them against
   `dualect/schema/rule.schema.json` plus folder conventions; `dualect/scaffold.py`
   creates new rule folders (with `TODO` markers the tests reject).
 - `dualect/runners.py` runs `.m` (oct2py, one reused session) and `.py` scripts;
   `dualect/compare.py` decides value equality; `dualect/verify.py` ties them
   together. Semantics are in docs/design.md section 12.1.
-- `tests/` — `test_rules.py` validates every rule and executes every case pair
-  (`@pytest.mark.octave`, skipped without Octave); `test_scan.py` covers
-  parsing, the Octave dialect, precedence, scanning and context.
+- `tests/` — `test_rules.py` (every case pair executed), `test_scan.py`
+  (parsing, Octave dialect, precedence, scanning, context), `test_translate.py`
+  (layer 2 and execution for every mechanical rule, pipeline behavior),
+  `test_corpus.py` (layer 3). Octave tests are `@pytest.mark.octave`.
 - CI: `.github/workflows/tests.yml` (Ubuntu apt Octave, `DUALECT_REQUIRE_OCTAVE=1`).
 
 ## Core ideas to preserve
@@ -46,7 +54,11 @@ Milestones 1-3 are done; next is milestone 4 (deterministic translators,
   (`rule.yaml`, optional `translate.py`, `cases/*.m` + `*.py`). Keep rules small
   and independent so a language change touches one folder.
 - **Status lifecycle**: `unsupported` → `guided` → `mechanical`. Only promote a
-  rule to `mechanical` when its `translate.py` passes all its cases.
+  rule to `mechanical` when its `translate.py` passes all its cases: output equal
+  to the hand-written `.py` (comments ignored) *and* verified against Octave.
+  A translator that cannot translate a form correctly raises `Decline` (the
+  statement becomes a reported hole); a shape guess must go through
+  `ctx.assume` so the output says so.
 - **A behavior change in MATLAB/Octave is a new variant rule** with
   `since`/`until`, not an edit that breaks the old behavior.
 - **Never translate silently wrong.** Unknown constructs raise a named

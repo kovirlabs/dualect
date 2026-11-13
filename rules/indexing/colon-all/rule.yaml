@@ -1,6 +1,6 @@
 id: indexing/colon-all
 title: "`A(:)`: all elements as one column"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [index:colon-all]
 octave: |

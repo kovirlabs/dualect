@@ -1,6 +1,6 @@
 id: operators/matrix-multiply
 title: "`*` (matrix product) vs `.*` (element-wise)"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:mtimes, op:times]
 octave: |

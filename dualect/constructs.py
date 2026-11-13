@@ -115,9 +115,12 @@ def statement_uses(stmt: ir.Stmt, analysis: Analysis) -> list[Use]:
     add = uses.append
     match stmt:
         case ir.Assign(targets=targets, value=value):
-            if len(targets) > 1:
+            # Several outputs of a built-in (`[m, i] = max(v)`) are that
+            # built-in's business; of a user function, the multiple-returns rule's.
+            builtin = isinstance(value, ir.Call) and not (value.local or value.handle)
+            if len(targets) > 1 and not builtin:
                 add(Use("assign:multi", stmt.loc))
-            if any(isinstance(t, ir.Ignore) for t in targets):
+            if any(isinstance(t, ir.Ignore) for t in targets) and not builtin:
                 add(Use("assign:ignore-output", stmt.loc))
             deleting = isinstance(value, ir.Matrix) and not value.rows
             for target in targets:
@@ -185,7 +188,12 @@ def _index_target_uses(
         return uses
     name = target.target.id if isinstance(target.target, ir.Name) else None
     before = analysis.env_before.get(id(stmt), {}).get(name) if name else None
-    if before is None or before.kind is Kind.EMPTY or index_may_grow(target, before, analysis):
+    if (
+        before is None
+        or before.maybe_undefined
+        or before.kind is Kind.EMPTY
+        or index_may_grow(target, before, analysis)
+    ):
         uses.append(Use("assign:grow", target.loc))
     return uses
 
@@ -257,6 +265,79 @@ def expression_uses(node: ir.Expr, analysis: Analysis) -> list[Use]:
     for child in ir.child_exprs(node):
         uses.extend(expression_uses(child, analysis))
     return _dedupe(uses)
+
+
+def primary_tag(node: ir.Expr | ir.Stmt, analysis: Analysis) -> str | None:
+    """The tag whose rule translates ``node`` itself (``None`` for core nodes).
+
+    Numbers, variables and plain assignment are core: they mean the same in
+    both languages and need no rule.
+
+    :param node: an expression or statement.
+    :param analysis: inference results (a bracket literal of arrays is a
+        concatenation, of strings a string concatenation).
+    """
+    match node:
+        case ir.Str(quote=quote):
+            return "literal:dq-string" if quote == '"' else "literal:string"
+        case ir.Matrix(rows=rows):
+            if not rows:
+                return "literal:empty"
+            infos = [analysis.info(item) for row in rows for item in row]
+            if all(info.kind is Kind.STRING for info in infos):
+                return "expr:string-concat"
+            if any(not info.is_scalar for info in infos):
+                return "expr:concat"
+            return "literal:matrix"
+        case ir.CellLit():
+            return "literal:cell"
+        case ir.Range():
+            return "expr:range"
+        case ir.BinOp(op=op) | ir.UnOp(op=op):
+            return f"op:{op}"
+        case ir.Transpose(conjugate=conjugate):
+            return "op:ctranspose" if conjugate else "op:transpose"
+        case ir.Index():
+            return "index:paren"
+        case ir.End():
+            return "index:end"
+        case ir.Call(func=func, local=local, handle=handle):
+            if local:
+                return "func:call-local"
+            if handle:
+                return "func:call-handle"
+            return _SPECIAL_CALLS.get(func, f"call:{func}")
+        case ir.Lambda():
+            return "func:handle"
+        case ir.FuncRef():
+            return "func:named-handle"
+        case ir.Opaque(construct=construct) | ir.OpaqueStmt(construct=construct):
+            return construct
+        case ir.AugAssign():
+            return "op:augassign"
+        case ir.If():
+            return "stmt:if"
+        case ir.For():
+            return "stmt:for"
+        case ir.While():
+            return "stmt:while"
+        case ir.DoUntil():
+            return "stmt:do-until"
+        case ir.Switch():
+            return "stmt:switch"
+        case ir.Break():
+            return "stmt:break"
+        case ir.Continue():
+            return "stmt:continue"
+        case ir.Return():
+            return "stmt:return"
+        case ir.Command():
+            return "syntax:command"
+        case ir.FunctionDef():
+            return "func:definition"
+        case ir.Comment(block=block):
+            return "syntax:block-comment" if block else "syntax:comment"
+    return None
 
 
 def _dedupe(uses: list[Use]) -> list[Use]:

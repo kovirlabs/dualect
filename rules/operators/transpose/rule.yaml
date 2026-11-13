@@ -1,6 +1,6 @@
 id: operators/transpose
 title: "`'` (conjugate transpose) vs `.'` (transpose)"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:ctranspose, op:transpose]
 octave: |

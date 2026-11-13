@@ -1,6 +1,6 @@
 # dualect — design
 
-Status: draft, 2026-11-12. This document is the plan; section 11 tracks what is built.
+Status: 2026-11-12. This document is the plan; section 11 tracks what is built.
 
 ## 1. Problem
 
@@ -210,6 +210,53 @@ join of the argument facts at its call sites in the file.
   constructs with no rule) followed by each needed rule's `rule.yaml` and up to
   two cases (`basic` first), as Markdown. Nothing else.
 
+### 5.4 Translation (settled in milestone 4)
+
+- **Representation.** Source scalars become Python numbers; a `1xN` row and an
+  `Nx1` column both become 1-D arrays (the analysis remembers which one it was,
+  so `c + r` gets `c[:, np.newaxis]` and `u' * v` becomes `np.outer(u, v)`);
+  only a true matrix is 2-D; char arrays become `str`.
+- **Per statement.** Every statement is planned from its construct tags: all
+  of its rules `mechanical` -> translated by their `translate.py`; otherwise it
+  becomes a *hole*, a `TODO(dualect)` comment carrying the source line and the
+  reason, followed by `raise NotImplementedError`, so partial output can never
+  run past an untranslated statement. A translator that meets a form it cannot
+  translate correctly raises `Decline`, which also makes a hole (reported as
+  `guided`). The report lists every statement with its rules, the status used
+  and whether the file verified.
+- **Translators** (`rules/<category>/<rule-id>/translate.py`, loaded by
+  `dualect/translators.py`) define `translate(node, ctx)` and optionally
+  `translate_store`, `translate_multi`, `position_outputs` and
+  `translate_positions`. They build Python `ast` nodes through the `Context` of
+  `dualect/emit.py`, which gives them facts (`ctx.info`), sub-expressions
+  (`ctx.expr`), other mechanical rules' helpers (`ctx.module`) and the
+  assumption channel (`ctx.assume`, emitted as `# dualect: assumed ...`).
+- **Shared semantics in the engine**, not in any one rule: copy-on-write (an
+  assignment `y = x`, a slice or a transpose gets `.copy()` when either side is
+  later modified in place; a parameter the function modifies is copied on
+  entry), and *position variables*: a variable that only ever holds positions
+  (integer literals, `find`, the second output of `max`, a `for` range) and is
+  only read inside subscripts is stored 0-based, so `i = 2; x(i + 1)` becomes
+  `i = 1; x[i + 1]` and `for k = 1:n` over subscripts becomes `range(n)`. At
+  script level such a variable gets a `# dualect: index` directive so `verify`
+  compares it as 0-based.
+- **Never silently wrong**, concretely: an element store into an array the
+  translation holds as integers (`np.array([1, 2, 3])`) is declined unless the
+  value is known to be an integer (NumPy would truncate); `max`/`min` of data
+  not known to be NaN-free use `np.nanmax`/`np.fmax`; a `continue` inside
+  `do ... until` is declined; indexing an array of unknown shape assumes a
+  vector, and a product of unknown shapes assumes `@`, each with an `assumed`
+  comment that verification then checks.
+- **Output.** ruff formats the file (its default style, so the result does not
+  depend on the caller's configuration). The first line states the verdict:
+  `verified against the .m source`, or `UNVERIFIED: <reason>` (holes, no
+  Octave, `--no-verify`, or differing outputs). Exit codes: 0 verified,
+  1 verification failed or `--strict` stopped (nothing written), 4 written but
+  incomplete or unverified. Float literals keep their source spelling.
+- **Layer 2 comparison** (section 7): translator output and the hand-written
+  case are both printed back with `ast.unparse`, which removes formatting and
+  comments; case comments are teaching notes, not code.
+
 ## 6. LLM integration
 
 The repo is the LLM's memory: models do not retain anything between tasks, so the
@@ -232,7 +279,9 @@ Three layers, from cheap to realistic:
 1. **Rule cases** (`rules/**/cases/`): each `.m`/`.py` pair runs in both
    languages and outputs are compared. A failure points at exactly one rule.
 2. **Translator tests**: each `translate.py` on its own cases yields code that
-   matches (after formatting) the hand-written `.py`.
+   matches (after formatting, comments ignored) the hand-written `.py`, and
+   that code verifies by execution. A `guided` rule whose cases all pass this
+   is flagged for promotion.
 3. **Combination corpus** (`corpus/`): realistic multi-construct snippets
    (a beam-deflection script, an ODE solve, a signal filter). Most real bugs are
    rule interactions (`end` + grow-on-assign + preallocation), and they show up
@@ -252,9 +301,8 @@ dualect rules list [--status guided]   # coverage at a glance
 dualect rules new indexing/foo         # scaffold a rule folder
 ```
 
-`translate` parses its arguments but exits with code 3 and a "not implemented
-yet" message until milestone 4 lands. `scan` and `context` take `--dialect`;
-`scan --json` gives machine-readable output.
+`scan`, `context` and `translate` take `--dialect`; `scan --json` gives
+machine-readable output; `translate` also takes `--no-verify`.
 
 ## 9. Tech stack
 
@@ -294,8 +342,28 @@ good seed for `builtins/*` rules (link, don't copy).
    `builtins/elementwise-math`, `builtins/constants`, `builtins/isempty` and
    `io/display`, which the scanner showed every real file needs). The IR, the
    lowering and shape inference landed here because the scanner walks the IR.
-4. **Deterministic translators** for the mechanical subset; combination corpus.
-5. **Python → Octave** for the same subset via the shared IR.
+4. **Deterministic translators** for the mechanical subset; combination corpus
+   (done: section 5.4). 30 of 35 rules are `mechanical`: every case of each
+   translates to the hand-written `.py` and verifies against Octave
+   (`tests/test_translate.py`). Still `guided`: `functions/multiple-returns`
+   (needs `nargout`-dependent bodies collapsed into one tuple return),
+   `functions/nargin` (the `isempty` default pattern and `np.clip` need
+   argument facts the analysis does not derive), `indexing/grow-on-assign`
+   (the idiomatic list-append and `np.pad` rewrites span statements),
+   `io/display` (printf formats) and `syntax/command-syntax` (its case needs
+   `strsplit`). Three hand-written case files changed to the equally idiomatic
+   form a statement-by-statement translator produces: `x = 1` (was `1.0`) in
+   control-flow/while, `x**-1.0` on an integer array in operators/power, and
+   line-by-line `z = x; z = z[~(z < 0)]` and `C = A.copy(); C[:] = ...` in
+   indexing/logical and indexing/colon-all. `corpus/` holds three scripts
+   (`tests/test_corpus.py`): `ode_rk4.m` translates completely and verifies;
+   `beam_deflection.m` is 29/30 (its `fprintf` is guided) and
+   `signal_filter.m` 29/33 (`filter` has no rule; two statements depend on it).
+5. **Python → Octave** for the same subset via the shared IR. The IR is ready
+   for it: index base, linear order and range inclusivity are fields, and
+   operators carry semantic names (`mtimes` vs `times`). What remains is a
+   Python `ast` lowering, an `.m` emitter, and a second translator entry point
+   per rule (the `translate.py` interface is per direction).
 6. **MCP server**, promotion-loop tooling, `llms.txt`.
 
 ## 12. Decisions

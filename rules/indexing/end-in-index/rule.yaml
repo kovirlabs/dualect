@@ -1,6 +1,6 @@
 id: indexing/end-in-index
 title: "`end` inside an index expression"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [index:end]
 octave: |

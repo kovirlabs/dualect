@@ -1,6 +1,6 @@
 id: functions/definition
 title: "Function definitions and argument copy semantics"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [func:definition, func:handle, func:call-local, func:call-handle, stmt:return, syntax:script-marker]
 octave: |

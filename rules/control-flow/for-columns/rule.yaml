@@ -1,6 +1,6 @@
 id: control-flow/for-columns
 title: "`for` loops iterate over columns"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [stmt:for]
 octave: |

@@ -1,6 +1,6 @@
 id: indexing/logical
 title: "Logical (mask) indexing"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [index:logical, index:delete]
 octave: |

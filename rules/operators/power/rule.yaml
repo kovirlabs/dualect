@@ -1,6 +1,6 @@
 id: operators/power
 title: "`^` (matrix power) vs `.^` (element-wise power)"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:mpower, op:power]
 octave: |
@@ -21,7 +21,8 @@ pitfalls:
     `2^-1` is `2**-1`, 0.5.
   - >-
     NumPy integer arrays raise on negative integer powers
-    (`np.arange(1, 4)**-1`); use floats.
+    (`np.arange(1, 4)**-1`); write the exponent as a float (`x**-1.0`) or
+    use float data.
   - >-
     A non-integer matrix power `A^0.5` is `scipy.linalg.fractional_matrix_power`,
     not `A**0.5`.

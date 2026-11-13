@@ -5,4 +5,5 @@ v = A.ravel(order="F")  # 1 4 2 5 3 6
 total = A.sum()
 B = A.copy()
 B[:] = 0
-C = np.arange(1, 7).reshape(A.shape, order="F")  # fills column by column
+C = A.copy()
+C[:] = np.arange(1, 7).reshape(C.shape, order="F")  # fills column by column

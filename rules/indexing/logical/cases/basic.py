@@ -5,5 +5,6 @@ mask = x > 2
 big = x[mask]
 y = x.copy()  # without copy, the next line would also change x
 y[y < 0] = 0
-z = x[~(x < 0)]  # deletion keeps the complement
+z = x
+z = z[~(z < 0)]  # deletion keeps the complement
 n_big = np.count_nonzero(mask)

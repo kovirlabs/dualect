@@ -1,6 +1,6 @@
 id: builtins/elementwise-math
 title: "Element-wise math: `abs`, `sqrt`, `exp`, `floor`, `mod`, `rem`, `isnan`, ..."
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match:
   - call:abs

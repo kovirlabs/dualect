@@ -1,6 +1,6 @@
 id: syntax/array-literals
 title: "Bracket literals: rows, columns, matrices, `[]` and concatenation"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [literal:matrix, literal:empty, expr:concat]
 octave: |

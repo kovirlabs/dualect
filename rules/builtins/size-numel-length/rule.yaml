@@ -1,6 +1,6 @@
 id: builtins/size-numel-length
 title: "`size`, `numel`, `length`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:size, call:numel, call:length]
 octave: |

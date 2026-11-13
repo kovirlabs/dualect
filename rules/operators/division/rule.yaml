@@ -1,6 +1,6 @@
 id: operators/division
 title: "`/`, `./` and `\\`: true division and linear solves"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:mrdivide, op:rdivide, op:mldivide, op:ldivide]
 octave: |

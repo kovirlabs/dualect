@@ -1,6 +1,6 @@
 id: operators/short-circuit
 title: "`&&`/`||` (short-circuit) vs `&`/`|` (element-wise)"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:andand, op:oror, op:and, op:or, call:xor]
 octave: |

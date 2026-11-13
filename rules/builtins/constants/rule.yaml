@@ -1,6 +1,6 @@
 id: builtins/constants
 title: "Constants: `pi`, `Inf`, `NaN`, `eps`, `true`, `false`, `i`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:pi, call:e, call:Inf, call:inf, call:NaN, call:nan, call:eps, call:true, call:false, call:i, call:j]
 octave: |

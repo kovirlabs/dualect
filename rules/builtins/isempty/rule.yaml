@@ -1,6 +1,6 @@
 id: builtins/isempty
 title: "`isempty`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:isempty]
 octave: |

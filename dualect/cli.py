@@ -7,13 +7,15 @@
 
     dualect scan script.m [--json]         # which rules does this file need?
     dualect context script.m               # LLM-ready context for those rules
-    dualect translate script.m -o out.py   # milestone 4
+    dualect translate script.m -o out.py [--strict] [--dialect matlab@R2023a]
     dualect verify script.m script.py      # run both, compare
     dualect rules list [--status guided]
     dualect rules new indexing/foo
 
-Exit codes: 0 success; 1 verification or validation failed, or an error was
-reported; 2 bad command-line usage (argparse); 3 command not implemented yet.
+Exit codes: 0 success; 1 verification or validation failed, ``--strict``
+stopped, or an error was reported; 2 bad command-line usage (argparse);
+3 command not implemented yet; 4 ``translate`` wrote an incomplete or
+unverified translation (its report and first line say which).
 """
 
 import argparse
@@ -28,6 +30,7 @@ from dualect.context import build_context
 from dualect.dialect import parse_dialect
 from dualect.errors import DualectError
 from dualect.paths import default_rules_dir
+from dualect.pipeline import StrictModeError, translate_file
 from dualect.rulebook import Status, load_rules
 from dualect.scaffold import new_rule
 from dualect.scan import ScanResult, scan_file
@@ -36,21 +39,7 @@ from dualect.verify import options_for_pair, verify_pair
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_NOT_IMPLEMENTED = 3
-
-#: Commands that parse their arguments but are built in a later milestone.
-_PLANNED = {
-    "translate": "milestone 4 (deterministic translators)",
-}
-
-
-def _not_implemented(args: argparse.Namespace) -> int:
-    """Report a planned command honestly instead of pretending to run it."""
-    print(
-        f"dualect {args.command}: not implemented yet; planned for "
-        f"{_PLANNED[args.command]}, see docs/design.md section 11",
-        file=sys.stderr,
-    )
-    return EXIT_NOT_IMPLEMENTED
+EXIT_INCOMPLETE = 4
 
 
 def _scan_source(args: argparse.Namespace) -> ScanResult:
@@ -70,6 +59,31 @@ def _context(args: argparse.Namespace) -> int:
     """Handle ``dualect context``."""
     print(build_context(result=_scan_source(args)), end="")
     return EXIT_OK
+
+
+def _translate(args: argparse.Namespace) -> int:
+    """Handle ``dualect translate``: translate, write, verify, report."""
+    rules = load_rules(rules_dir=args.rules_dir)
+    try:
+        result = translate_file(
+            source=args.source,
+            output=args.output,
+            rules=rules,
+            dialect=parse_dialect(args.dialect),
+            strict=args.strict,
+            verify=not args.no_verify,
+        )
+    except StrictModeError as exc:
+        print(f"dualect: {exc}", file=sys.stderr)
+        print("dualect: nothing was written", file=sys.stderr)
+        return EXIT_FAILED
+    print(result.report())
+    print(f"wrote {args.output}")
+    if result.verified:
+        return EXIT_OK
+    if result.verify is not None:
+        return EXIT_FAILED
+    return EXIT_INCOMPLETE
 
 
 def _verify(args: argparse.Namespace) -> int:
@@ -135,12 +149,20 @@ def build_parser() -> argparse.ArgumentParser:
     add_source_options(context)
     context.set_defaults(handler=_context)
 
-    translate = commands.add_parser("translate", help="translate a file (not implemented yet)")
-    translate.add_argument("source", type=Path)
-    translate.add_argument("-o", "--output", type=Path)
-    translate.add_argument("--strict", action="store_true", help="stop at unsupported constructs")
-    translate.add_argument("--dialect", help="source dialect and version, e.g. matlab@R2023a")
-    translate.set_defaults(handler=_not_implemented)
+    translate = commands.add_parser(
+        "translate", help="translate a .m file to Python/NumPy, then verify it by execution"
+    )
+    add_source_options(translate)
+    translate.add_argument("-o", "--output", type=Path, required=True, help="the .py to write")
+    translate.add_argument(
+        "--strict",
+        action="store_true",
+        help="stop, writing nothing, if any statement needs guided or unsupported translation",
+    )
+    translate.add_argument(
+        "--no-verify", action="store_true", help="skip running both sides (output is UNVERIFIED)"
+    )
+    translate.set_defaults(handler=_translate)
 
     verify = commands.add_parser("verify", help="run a .m and a .py script and compare outputs")
     verify.add_argument("m_file", type=Path)

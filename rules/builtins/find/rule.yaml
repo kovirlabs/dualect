@@ -1,6 +1,6 @@
 id: builtins/find
 title: "`find`: 1-based, column-major indices"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:find]
 octave: |

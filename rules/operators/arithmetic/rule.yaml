@@ -1,6 +1,6 @@
 id: operators/arithmetic
 title: "`+`, `-`, comparisons and implicit expansion"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [op:plus, op:minus, op:uminus, op:uplus, op:eq, op:lt, op:le, op:gt, op:ge]
 octave: |

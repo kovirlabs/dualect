@@ -1,6 +1,6 @@
 id: builtins/linspace
 title: "`linspace` default count and edge cases"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:linspace]
 octave: |

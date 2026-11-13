@@ -1,6 +1,6 @@
 id: builtins/zeros-ones-eye
 title: "`zeros`, `ones`, `eye`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [call:zeros, call:ones, call:eye]
 octave: |
