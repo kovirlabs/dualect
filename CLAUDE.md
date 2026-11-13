@@ -14,7 +14,12 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Milestone 1 (skeleton) is done; next is milestone 2 in docs/design.md.
+Milestones 1 (skeleton) and 2 (first rules) are done; next is milestone 3
+(scanner + `context` command) in docs/design.md section 11.
+
+- `rules/` — 26 rules in 6 categories, all `guided` (no `translate.py` yet),
+  37 `.m`/`.py` case pairs. `.m` cases must run on Octave 8 (CI, apt) and 11
+  (local); `.py` cases are ruff-formatted idiomatic NumPy.
 
 - `dualect/cli.py` — the `dualect` command. `verify` and `rules list|new` work;
   `scan`, `context`, `translate` exit 3 with "not implemented yet".

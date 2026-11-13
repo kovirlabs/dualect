@@ -1,0 +1,30 @@
+id: builtins/find
+title: "`find`: 1-based, column-major indices"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  idx = find(x > 2);          % 1-based
+  first = find(x > 2, 1);
+  [r, c] = find(A);
+python: |
+  idx = np.flatnonzero(x > 2)   # 0-based
+  first = np.flatnonzero(x > 2)[:1]
+  c, r = np.nonzero(A.T)        # column-major order
+why: >
+  `find` returns 1-based linear indices in column-major order;
+  `np.flatnonzero` returns 0-based indices in row-major order. For vectors only
+  the base differs. For a matrix, `np.flatnonzero(A.ravel(order="F"))` gives
+  the same order, and `[r, c] = find(A)`, which lists nonzeros column by
+  column, is `np.nonzero(A.T)` with its two outputs swapped.
+pitfalls:
+  - >-
+    When the indices are only used to index again, `x(find(m))`, drop `find`
+    and use the mask: `x[m]`.
+  - >-
+    `find(x, k)` returns at most k indices: `np.flatnonzero(x)[:k]`, which is an
+    array, possibly empty, not a scalar.
+  - >-
+    No match gives an empty array (`zeros(1, 0)`); test with `.size == 0`, not
+    `is None`.
+related: [indexing/logical, indexing/one-based, builtins/sum-mean-max]
+python_imports: [import numpy as np]

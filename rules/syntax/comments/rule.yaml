@@ -1,0 +1,31 @@
+id: syntax/comments
+title: "Comments: `%`, `#`, and `%{ ... %}` blocks"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  x = 1;  % trailing comment
+  # line comment (Octave only)
+  %{
+  block comment
+  %}
+python: |
+  x = 1  # trailing comment
+  # line comment
+  # block comment, one '#' per line
+why: >
+  `%` starts a comment in both dialects and Octave also accepts `#`. A block
+  comment is `%{` ... `%}` (or `#{` ... `#}`), each marker alone on its line.
+  Python has only `#`: a block becomes consecutive `#` lines, not a string
+  literal, which would be an expression statement.
+pitfalls:
+  - >-
+    `%` inside a string is not a comment: `fmt = '%d items'` keeps the `%`.
+  - >-
+    `#` comments and `#{ ... #}` blocks are Octave only; MATLAB rejects them.
+  - >-
+    `%{` opens a block only when nothing else is on its line; otherwise it is an
+    ordinary line comment.
+  - >-
+    A `%%` line marks a code cell; keep it as `# %%` so editors still see cells.
+related: [syntax/line-continuation]
+python_imports: []

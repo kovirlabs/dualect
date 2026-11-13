@@ -1,0 +1,33 @@
+id: indexing/ranges
+title: "Colon ranges `a:b` and `a:step:b`"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  r = 1:5;
+  s = 0:0.25:1;
+  d = 5:-1:1;
+  part = x(2:4);
+python: |
+  r = np.arange(1, 6)
+  s = np.linspace(0, 1, 5)
+  d = np.arange(5, 0, -1)
+  part = x[1:4]
+why: >
+  `a:b` includes `b`; `np.arange` and slices exclude their stop. As a value,
+  `a:b` is `np.arange(a, b + 1)`. As an index, `x(i:j)` is `x[i-1:j]`: the start
+  shifts by one and the stop does not. With a fractional step, use
+  `np.linspace(a, b, n)` with `n = floor((b - a) / step) + 1`, because
+  `np.arange` with a float step can gain or lose the end point to rounding.
+pitfalls:
+  - >-
+    A descending range needs an explicit negative step in both languages: `5:1`
+    is empty, `5:-1:1` is not. As a value it is `np.arange(5, 0, -1)`; as an
+    index `x(5:-1:1)` is `x[4::-1]`, because a stop of `-1` would mean the last
+    element.
+  - >-
+    A range is a 1xN row in Octave and a 1-D array in NumPy; transposing a 1-D
+    array does nothing (see operators/transpose).
+  - >-
+    `x(1:2:end)` is `x[::2]` and `x(end:-1:1)` is `x[::-1]`.
+related: [indexing/one-based, indexing/end-in-index, builtins/linspace]
+python_imports: [import numpy as np]

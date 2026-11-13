@@ -1,0 +1,31 @@
+id: operators/matrix-multiply
+title: "`*` (matrix product) vs `.*` (element-wise)"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  C = A * B;          % matrix product
+  D = A .* B;         % element-wise
+  s = 2 * A;          % scalar: same either way
+python: |
+  C = A @ B
+  D = A * B
+  s = 2 * A
+why: >
+  In Octave `*` is the matrix product and `.*` is element-wise; in NumPy `*`
+  is element-wise and `@` is the matrix product. Scalar times array is the same
+  in both. Mapping `*` to `*` does not always fail: two square matrices of the
+  same size multiply element-wise without any error, giving wrong numbers.
+pitfalls:
+  - >-
+    With 1-D arrays there is no row/column: `u * v'` (inner product of rows)
+    is `u @ v`, and `u' * v` (outer product) is `np.outer(u, v)`.
+  - >-
+    `A * x` with a column vector `x` is `A @ x`; a 1-D `x` works and returns 1-D.
+  - >-
+    `/` and `\` are matrix division when both sides are matrices:
+    `A \ b` is `np.linalg.solve(A, b)`, never `b / A`.
+  - >-
+    When an operand's shape is unknown (scalar or matrix?), `@` is the safe
+    translation of `*` only if both are arrays; `@` with a Python scalar raises.
+related: [operators/power, operators/transpose]
+python_imports: [import numpy as np]

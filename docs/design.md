@@ -236,7 +236,9 @@ good seed for `builtins/*` rules (link, don't copy).
 
 1. **Skeleton** (done): package, CLI stub, rule schema + validator, rule scaffolder,
    Octave-in-CI. Verify harness runs one hand-written pair.
-2. **First 20 rules**, Octave → Python, all with cases:
+2. **First 20 rules** (done: the list below is 26 rules, all `guided`, 37 case
+   pairs, each executed in both languages by `tests/test_rules.py`), Octave →
+   Python, all with cases:
    - syntax: comments, line continuation, command vs function syntax
    - indexing: one-based, ranges, `end`, logical indexing, grow-on-assign, colon `(:)`
    - operators: `*` vs `.*`, `'` vs `.'`, `^` vs `.^`, `~=`/`!=`, `&&`/`||`

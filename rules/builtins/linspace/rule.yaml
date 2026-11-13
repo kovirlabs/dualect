@@ -1,0 +1,25 @@
+id: builtins/linspace
+title: "`linspace` default count and edge cases"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  x = linspace(0, 1, 5);
+  y = linspace(0, 1);       % 100 points
+python: |
+  x = np.linspace(0, 1, 5)
+  y = np.linspace(0, 1, 100)
+why: >
+  Both include both end points. The default count differs: 100 in Octave and
+  MATLAB, 50 in NumPy, so always pass the count explicitly. The result is a
+  1xN row in Octave and a 1-D array in NumPy.
+pitfalls:
+  - >-
+    `linspace(a, b, 1)` returns `b` in Octave and MATLAB but `a` in NumPy;
+    translate it as `np.array([b])`.
+  - >-
+    `linspace(a, b, 0)` is empty in both.
+  - >-
+    For colon ranges with a fractional step, prefer `np.linspace` with a
+    computed count; see indexing/ranges.
+related: [indexing/ranges]
+python_imports: [import numpy as np]

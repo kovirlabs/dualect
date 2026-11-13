@@ -1,0 +1,29 @@
+id: indexing/grow-on-assign
+title: "Growing an array by assigning past its end"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  x(end+1) = v;
+  y(5) = 1;           % pads with zeros
+python: |
+  x = np.append(x, v)
+  y = np.zeros(5)
+  y[4] = 1
+why: >
+  Assigning past the end grows an Octave array, filling any gap with zeros.
+  NumPy arrays have a fixed size and raise IndexError instead. Collect values
+  in a Python list and convert once, or preallocate with `np.zeros` when the
+  final size is known; `np.append` copies the whole array on every call.
+pitfalls:
+  - >-
+    `y = []` followed by `y(end+1) = v` in a loop becomes a list with
+    `.append(v)` and `np.array(values)` after the loop, not repeated
+    `np.append`.
+  - >-
+    Assigning past the edge of a matrix adds zero-filled rows/columns:
+    `A(2, 4) = 1` on a 2x2 makes it 2x4 (`np.pad`, or preallocate).
+  - >-
+    `x(end+1) = v` on `[]` creates a row; on a column vector it extends the
+    column.
+related: [indexing/end-in-index, builtins/zeros-ones-eye]
+python_imports: [import numpy as np]

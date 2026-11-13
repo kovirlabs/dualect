@@ -1,0 +1,27 @@
+id: indexing/end-in-index
+title: "`end` inside an index expression"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  last = x(end);
+  tail = x(end-2:end);
+python: |
+  last = x[-1]
+  tail = x[-3:]
+why: >
+  Inside an index, `end` is the length of the dimension being indexed and
+  ranges include their stop. Python uses negative indices and exclusive slice
+  stops: `x(end - k)` is `x[-1 - k]`, and `end-2:end` is three elements, so the
+  Python start is `-3`, not `-2`.
+pitfalls:
+  - >-
+    `x(end+1) = v` grows the array in Octave; NumPy raises IndexError. See
+    indexing/grow-on-assign.
+  - >-
+    In nested indexing `end` binds to the innermost array being indexed:
+    in `x(idx(end))` it is the length of `idx`.
+  - >-
+    In `A(end, 1)` and `A(1, end)`, `end` is the size of that particular
+    dimension: `A[-1, 0]`, `A[0, -1]`.
+related: [indexing/one-based, indexing/ranges, indexing/grow-on-assign]
+python_imports: []

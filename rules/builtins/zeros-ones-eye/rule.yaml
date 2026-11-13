@@ -1,0 +1,30 @@
+id: builtins/zeros-ones-eye
+title: "`zeros`, `ones`, `eye`"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  Z = zeros(3);       % 3x3!
+  W = ones(2, 4);
+  Id = eye(3);
+  z = zeros(1, 5);
+python: |
+  Z = np.zeros((3, 3))
+  W = np.ones((2, 4))
+  Id = np.eye(3)
+  z = np.zeros(5)
+why: >
+  With a single argument `n`, `zeros(n)` and `ones(n)` make an n-by-n matrix,
+  while `np.zeros(n)` makes a 1-D array of length n. Pass the shape as a tuple.
+  `eye(n)` and `eye(m, n)` match `np.eye(n)` and `np.eye(m, n)`. A 1xN or Nx1
+  result is idiomatically a 1-D array.
+pitfalls:
+  - >-
+    `zeros(size(A))` is `np.zeros(A.shape)`; `np.zeros_like(A)` would copy an
+    integer dtype from `A`, while Octave's result is always double.
+  - >-
+    `zeros(0, 3)` is an empty array of shape `(0, 3)`; keep the tuple.
+  - >-
+    A class argument maps to `dtype`: `zeros(2, 'int32')` is
+    `np.zeros((2, 2), dtype=np.int32)`.
+related: [indexing/grow-on-assign, builtins/size-numel-length]
+python_imports: [import numpy as np]

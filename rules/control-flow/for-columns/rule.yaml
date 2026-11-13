@@ -1,0 +1,34 @@
+id: control-flow/for-columns
+title: "`for` loops iterate over columns"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  for c = A           % c is each column of A
+    total = total + c;
+  end
+  for k = 1:n
+    s = s + k;
+  end
+python: |
+  for c in A.T:       # rows of A.T are the columns of A
+      total = total + c
+  for k in range(1, n + 1):
+      s += k
+why: >
+  `for v = M` assigns each *column* of `M` to `v` in turn: a row vector gives
+  scalars, a matrix gives column vectors. Python iterates over the first axis
+  (rows), so loop over `A.T` to get columns. A counting loop `for k = 1:n` is
+  `range(1, n + 1)` when `k` is a value, or `range(n)` when it is used only as
+  an index (then shift the indexing too).
+pitfalls:
+  - >-
+    Looping over a column vector `for v = [1; 2; 3]` runs *once*, with `v` the
+    whole column; iterating a 1-D NumPy array runs three times.
+  - >-
+    After `for k = 1:n`, `k` is `n`; after `for k in range(n)` it is `n - 1`
+    (and unbound when `n` is 0).
+  - >-
+    Assigning to the loop variable inside the body does not affect the next
+    iteration, in either language.
+related: [indexing/ranges, control-flow/while]
+python_imports: [import numpy as np]

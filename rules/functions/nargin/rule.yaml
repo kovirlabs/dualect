@@ -1,0 +1,32 @@
+id: functions/nargin
+title: "Optional arguments with `nargin`"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  function y = scale(x, factor)
+    if nargin < 2
+      factor = 10;
+    end
+    y = x * factor;
+  end
+python: |
+  def scale(x, factor=10):
+      return x * factor
+why: >
+  Octave has no default argument values: a function checks `nargin` (how many
+  inputs the caller passed) and fills in the rest. In Python a `nargin < k`
+  default becomes a parameter default. When the default depends on another
+  argument, or callers pass `[]` to mean "use the default", use `None` as the
+  default and fill it in the body.
+pitfalls:
+  - >-
+    Never use a mutable default (a list or array): it is created once and
+    shared between calls. Use `None`.
+  - >-
+    `nargin < 2 || isempty(lo)` lets callers skip an argument with `[]`; map
+    that to `None` (`if lo is None`).
+  - >-
+    `varargin` collects extra inputs in a cell array: `*args`. `nargin` counts
+    them too.
+related: [functions/definition, functions/multiple-returns]
+python_imports: [import numpy as np]

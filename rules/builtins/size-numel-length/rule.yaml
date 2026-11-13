@@ -1,0 +1,32 @@
+id: builtins/size-numel-length
+title: "`size`, `numel`, `length`"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  [r, c] = size(A);
+  r = size(A, 1);
+  n = numel(A);
+  L = length(A);      % largest dimension
+python: |
+  r, c = A.shape
+  r = A.shape[0]
+  n = A.size
+  L = max(A.shape)
+why: >
+  `size` is `A.shape` and `size(A, d)` is `A.shape[d - 1]`; `numel` is
+  `A.size`. `length` is the *largest* dimension (0 for empty), not the number
+  of rows: Python's `len(A)` is the number of rows, which differs for wide
+  matrices.
+pitfalls:
+  - >-
+    `length` of a 2x5 matrix is 5, while `len(A)` is 2.
+  - >-
+    Octave arrays are at least 2-D: for a row vector `size(v)` is `[1 n]` and
+    `size(v, 1)` is 1, but a 1-D NumPy array has shape `(n,)` and
+    `v.shape[0]` is n. Translate vector sizes as `v.size`.
+  - >-
+    `size(A, 3)` is 1 for a matrix, but `A.shape[2]` raises IndexError.
+  - >-
+    `numel(A)` is `A.size` (an attribute), not `A.size()`.
+related: [builtins/zeros-ones-eye]
+python_imports: [import numpy as np]

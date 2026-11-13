@@ -1,0 +1,33 @@
+id: builtins/sum-mean-max
+title: "`sum`, `mean`, `max`, `min`: dimensions and index outputs"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  s = sum(A);           % down each column
+  m = mean(A, 2);       % along each row
+  [mx, i] = max(v);     % i is 1-based
+  t = sum(A(:));
+python: |
+  s = A.sum(axis=0)
+  m = A.mean(axis=1)
+  i = np.argmax(v)
+  mx = v[i]
+  t = A.sum()
+why: >
+  On a matrix these reduce down the columns (dimension 1) by default, which is
+  `axis=0`; NumPy with no axis reduces *all* elements. Dimension `d` is
+  `axis=d - 1`. The second output of `max`/`min` is a 1-based position;
+  `np.argmax`/`np.argmin` return 0-based positions (both take the first
+  occurrence on ties).
+pitfalls:
+  - >-
+    On a row vector `sum(v)` sums along the row (the first non-singleton
+    dimension); for a 1-D array `v.sum()` is right.
+  - >-
+    `max(A, [], 2)` is the row-wise maximum `A.max(axis=1)`; `max(a, b)` with two
+    arrays is element-wise, `np.maximum(a, b)`.
+  - >-
+    `max` and `min` skip NaN (`max([1 NaN 3])` is 3), while NumPy's propagate
+    it: use `np.nanmax`/`np.nanargmax`. `sum` and `mean` propagate NaN in both.
+related: [functions/multiple-returns, indexing/colon-all, builtins/find]
+python_imports: [import numpy as np]

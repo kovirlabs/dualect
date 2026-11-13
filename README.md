@@ -3,7 +3,8 @@
 Translate numeric code between Octave/MATLAB-style `.m` files and Python/NumPy,
 in both directions, with every translation **verified by running both sides**.
 
-> **Status: early skeleton.** `dualect verify` and the rule tooling work; scanning and
+> **Status: early.** `dualect verify`, the rule tooling and the first 26 rules (Octave →
+> Python, all `guided`, every case verified in both languages) work; scanning and
 > translating are not built yet. See [docs/design.md](docs/design.md) section 11.
 
 ## Why

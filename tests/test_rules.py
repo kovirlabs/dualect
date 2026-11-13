@@ -25,6 +25,25 @@ def _case_id(item: tuple[Rule, CasePair]) -> str:
     return f"{rule.id}:{case.name}"
 
 
+#: Milestone 2 (docs/design.md section 11): the first rules, Octave -> Python.
+MILESTONE_2 = {
+    "syntax/comments", "syntax/line-continuation", "syntax/command-syntax",
+    "indexing/one-based", "indexing/ranges", "indexing/end-in-index", "indexing/logical",
+    "indexing/grow-on-assign", "indexing/colon-all",
+    "operators/matrix-multiply", "operators/transpose", "operators/power",
+    "operators/not-equal", "operators/short-circuit",
+    "control-flow/for-columns", "control-flow/while", "control-flow/if-elseif",
+    "control-flow/switch",
+    "functions/definition", "functions/multiple-returns", "functions/nargin",
+    "builtins/zeros-ones-eye", "builtins/linspace", "builtins/size-numel-length",
+    "builtins/sum-mean-max", "builtins/find",
+}  # fmt: skip
+
+
+def test_milestone_2_rules_exist() -> None:
+    assert {rule.id for rule in RULES} >= MILESTONE_2
+
+
 def test_whole_knowledge_base_validates() -> None:
     assert validate_all(rules_dir=RULES_DIR) == []
 

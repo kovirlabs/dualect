@@ -1,0 +1,30 @@
+id: syntax/line-continuation
+title: "Line continuation with `...`"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  total = a + b + ...
+          c;
+  v = [1, 2, ...
+       3];
+python: |
+  total = (a + b
+           + c)
+  v = np.array([1, 2,
+                3])
+why: >
+  `...` joins the next line to the current one, and anything after it on the
+  same line is a comment. Python continues lines implicitly inside brackets,
+  so wrap a long expression in parentheses instead of using a backslash.
+pitfalls:
+  - >-
+    Inside `[ ]` or `{ }` a newline *without* `...` starts a new row:
+    `[1 2` newline `3 4]` is a 2x2 matrix, while `[1 2 ...` newline `3 4]` is a
+    1x4 row.
+  - >-
+    Old Octave versions also accepted a backslash as continuation outside
+    strings; Octave 11 rejects it. Treat it as unsupported, not as `...`.
+  - >-
+    Text after `...` is a comment even if it looks like code.
+related: [syntax/comments]
+python_imports: [import numpy as np]

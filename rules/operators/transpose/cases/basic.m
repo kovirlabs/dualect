@@ -1,0 +1,9 @@
+A = [1 2 3; 4 5 6];
+At = A';
+Z = [1+2i, 3-1i; 2i, 4];
+Zh = Z';            % conjugate transpose
+Zt = Z.';           % plain transpose
+z = [1+2i, 3-1i];
+zh = z';
+c = [1 2 3]';
+c_total = sum(c);

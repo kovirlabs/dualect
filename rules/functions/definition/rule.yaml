@@ -1,0 +1,36 @@
+id: functions/definition
+title: "Function definitions and argument copy semantics"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  function y = area(r)
+    y = pi * r.^2;
+  end
+  sq = @(t) t.^2;
+python: |
+  def area(r):
+      return np.pi * r**2
+
+  sq = lambda t: t**2
+why: >
+  The output variable named in the header is returned when the function ends;
+  in Python, `return` it explicitly. Octave passes arguments by value (copy on
+  write), so a function can never change the caller's array; NumPy passes a
+  reference, so copy an argument before modifying it in place. An anonymous
+  function `@(t) expr` is a `lambda` (or a small `def`).
+pitfalls:
+  - >-
+    `x(1) = 0` inside a function leaves the caller's `x` untouched in Octave,
+    while `x[0] = 0` in Python changes the caller's array: write
+    `x = x.copy()` first.
+  - >-
+    In a script, Octave needs a leading `1;` and functions defined before use,
+    while MATLAB (R2016b+) wants local functions at the end of the file.
+  - >-
+    In a function file the first function is the public one and later ones are
+    local helpers; `end`/`endfunction` may be omitted in Octave.
+  - >-
+    An anonymous function captures variable *values* when it is created;
+    a Python lambda looks names up when it is called.
+related: [functions/multiple-returns, functions/nargin]
+python_imports: [import numpy as np]

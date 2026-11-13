@@ -84,7 +84,10 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # Rule case files are hand-written translation targets: they are scripts whose
 # top-level variables are the compared outputs, so "unused" names are the point.
-"rules/**/cases/*.py" = ["F841", "B007", "E741"]
+# They mirror the .m side line by line, so a ternary (SIM108), a named
+# lambda for a function handle (E731) or enumerate() for a counter (SIM113)
+# would hide the correspondence.
+"rules/**/cases/*.py" = ["F841", "B007", "E731", "SIM108", "SIM113"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["dualect"]

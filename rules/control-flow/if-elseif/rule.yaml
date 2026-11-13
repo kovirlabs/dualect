@@ -1,0 +1,36 @@
+id: control-flow/if-elseif
+title: "`if` / `elseif` / `else` and array conditions"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  if x > 0
+    s = 1;
+  elseif x < 0
+    s = -1;
+  else
+    s = 0;
+  end
+python: |
+  if x > 0:
+      s = 1
+  elif x < 0:
+      s = -1
+  else:
+      s = 0
+why: >
+  Same structure; `elseif` becomes `elif` and `end` disappears. A condition
+  that is an array is true only if it is non-empty and all its elements are
+  nonzero. NumPy refuses to guess (multi-element and empty arrays raise), so
+  write `cond.size > 0 and cond.all()` explicitly.
+pitfalls:
+  - >-
+    `if []` is false and `if [1 1 0]` is false; `bool(np.array([]))` raises in
+    current NumPy and `np.array([]).all()` is True.
+  - >-
+    `else if` (two words) opens a *nested* `if` that needs its own `end`; it is
+    not `elif`.
+  - >-
+    `if a == b` on strings of different lengths is an error in Octave; string
+    comparison is `strcmp(a, b)`, which is `a == b` for Python strings.
+related: [control-flow/switch, control-flow/while, operators/short-circuit]
+python_imports: [import numpy as np]

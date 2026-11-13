@@ -33,6 +33,13 @@ def test_rules_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert "unsupported" in out
 
 
+def test_rules_list_repository(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["rules", "--rules-dir", str(RULES_DIR), "list", "--status", "guided"]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert "indexing/end-in-index" in out
+    assert "builtins/find" in out
+
+
 def test_rules_list_status_filter(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["rules", "--rules-dir", str(RULES_DIR), "list", "--status", "mechanical"]) == 0
     captured = capsys.readouterr()

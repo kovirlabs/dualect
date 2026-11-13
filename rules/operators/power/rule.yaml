@@ -1,0 +1,31 @@
+id: operators/power
+title: "`^` (matrix power) vs `.^` (element-wise power)"
+status: guided
+dialects: [octave, matlab]
+octave: |
+  P = A ^ 2;          % A * A
+  Q = A .^ 2;         % element-wise
+python: |
+  P = np.linalg.matrix_power(A, 2)
+  Q = A**2
+why: >
+  For a square matrix, `^` is the matrix power (repeated matrix product) and
+  `.^` is element-wise. Python's `**` on arrays is element-wise. For scalars
+  the two coincide, so `x^2` with scalar `x` is just `x**2`.
+pitfalls:
+  - >-
+    `^` in Python is bitwise XOR: `2 ^ 3` is 1, not 8.
+  - >-
+    `-2^2` is -4 in both languages (power binds tighter than unary minus), and
+    `2^-1` is `2**-1`, 0.5.
+  - >-
+    NumPy integer arrays raise on negative integer powers
+    (`np.arange(1, 4)**-1`); use floats.
+  - >-
+    A non-integer matrix power `A^0.5` is `scipy.linalg.fractional_matrix_power`,
+    not `A**0.5`.
+  - >-
+    Old Octave versions accepted `**` as an alias for `^` (matrix power, not
+    element-wise); Octave 11 rejects it.
+related: [operators/matrix-multiply]
+python_imports: [import numpy as np]
