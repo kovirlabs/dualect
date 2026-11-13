@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Evan Gress
+
+[project]
+name = "dualect"
+version = "0.1.0"
+description = "Translate numeric code between .m files and Python/NumPy, verified by running both sides."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Evan Gress" }]
+keywords = ["numpy", "translation", "transpiler", "scientific-computing"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
+]
+dependencies = [
+    "jsonschema>=4.23",
+    "numpy>=2.0",
+    # Runs .m code from Python; used by `dualect verify` and the rule-case tests.
+    "oct2py>=5.8",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+dualect = "dualect.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dualect"]
+
+# Rules live in this repository (docs/design.md section 12). A built wheel
+# carries a copy inside the package so an installed `dualect` still finds them;
+# dualect.paths looks there when the source-tree `rules/` folder is absent.
+[tool.hatch.build.targets.wheel.force-include]
+"rules" = "dualect/_rules"
+
+[tool.hatch.build.targets.sdist]
+include = ["/dualect", "/rules", "/README.md", "/LICENSE", "/docs"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+    # Type stubs are only needed by mypy, so they live here.
+    "types-jsonschema",
+    "types-pyyaml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "octave: needs the GNU Octave executable (skipped when it is not installed)",
+]
+
+# --- Ruff: linter + formatter -------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # flake8-bugbear
+    "UP",       # pyupgrade
+    "SIM",      # flake8-simplify
+    "NPY",      # NumPy-specific checks
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Rule case files are hand-written translation targets: they are scripts whose
+# top-level variables are the compared outputs, so "unused" names are the point.
+"rules/**/cases/*.py" = ["F841", "B007", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dualect"]
+
+# --- mypy -------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+packages = ["dualect"]
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+strict_optional = true
+
+# oct2py ships no type information.
+[[tool.mypy.overrides]]
+module = ["oct2py", "oct2py.*"]
+ignore_missing_imports = true

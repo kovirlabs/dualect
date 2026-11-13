@@ -14,8 +14,20 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Design only. No package code exists yet. Next step is milestone 1 in
-docs/design.md (skeleton, rule schema, verify harness, Octave in CI).
+Milestone 1 (skeleton) is done; next is milestone 2 in docs/design.md.
+
+- `dualect/cli.py` — the `dualect` command. `verify` and `rules list|new` work;
+  `scan`, `context`, `translate` exit 3 with "not implemented yet".
+- `dualect/rulebook.py` loads rules; `dualect/validate.py` checks them against
+  `dualect/schema/rule.schema.json` plus folder conventions; `dualect/scaffold.py`
+  creates new rule folders (with `TODO` markers the tests reject).
+- `dualect/runners.py` runs `.m` (oct2py, one reused session) and `.py` scripts;
+  `dualect/compare.py` decides value equality; `dualect/verify.py` ties them
+  together. Semantics are in docs/design.md section 12.1.
+- `tests/` — `test_rules.py` validates every rule and executes every case pair
+  (`@pytest.mark.octave`, skipped without Octave); `tests/data/beam.*` is the
+  hand-written harness pair.
+- CI: `.github/workflows/tests.yml` (Ubuntu apt Octave, `DUALECT_REQUIRE_OCTAVE=1`).
 
 ## Core ideas to preserve
 
@@ -34,13 +46,14 @@ docs/design.md (skeleton, rule schema, verify harness, Octave in CI).
 - `rule.yaml` `why`/`pitfalls` text is written for both a human learner and an
   LLM; keep it precise and short.
 
-## Tooling (planned; match first-principles-code conventions)
+## Tooling (matches first-principles-code conventions)
 
 Python 3.11+ managed with **uv**; ruff, mypy, pytest.
 
 ```bash
 uv sync --all-groups      # install
 uv run pytest             # tests (Octave-dependent tests skip if Octave is absent)
+uv run pytest -m 'not octave'   # only the tests that need no Octave
 uv run ruff check . && uv run ruff format .
 uv run mypy dualect
 ```

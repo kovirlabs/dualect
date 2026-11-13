@@ -1,6 +1,6 @@
 # dualect — design
 
-Status: draft, 2026-11-12. Nothing here is built yet; this document is the plan.
+Status: draft, 2026-11-12. This document is the plan; section 11 tracks what is built.
 
 ## 1. Problem
 
@@ -199,7 +199,7 @@ Three layers, from cheap to realistic:
 Octave is required for execution tests; CI installs it. Tests that need Octave are
 marked so they skip cleanly on machines without it.
 
-## 8. CLI (planned)
+## 8. CLI
 
 ```bash
 dualect scan script.m                  # which rules does this file need?
@@ -209,6 +209,9 @@ dualect verify script.m script.py      # run both, compare
 dualect rules list [--status guided]   # coverage at a glance
 dualect rules new indexing/foo         # scaffold a rule folder
 ```
+
+`scan`, `context` and `translate` parse their arguments but exit with code 3
+and a "not implemented yet" message until their milestone lands.
 
 ## 9. Tech stack
 
@@ -231,7 +234,7 @@ good seed for `builtins/*` rules (link, don't copy).
 
 ## 11. Milestones
 
-1. **Skeleton**: package, CLI stub, rule schema + validator, rule scaffolder,
+1. **Skeleton** (done): package, CLI stub, rule schema + validator, rule scaffolder,
    Octave-in-CI. Verify harness runs one hand-written pair.
 2. **First 20 rules**, Octave → Python, all with cases:
    - syntax: comments, line continuation, command vs function syntax
@@ -245,12 +248,43 @@ good seed for `builtins/*` rules (link, don't copy).
 5. **Python → Octave** for the same subset via the shared IR.
 6. **MCP server**, promotion-loop tooling, `llms.txt`.
 
-## 12. Open questions
+## 12. Decisions
 
-- Target style: plain NumPy only, or allow an optional small helper module for
-  constructs with no clean NumPy idiom (cell arrays)? Leaning: plain NumPy, helper
-  only as an opt-in flag.
-- Which Octave version does CI pin? (Ubuntu LTS package vs a container image.)
-- Tolerance policy for verify: global default plus per-rule override?
-- Should rules live in this repo only, or be publishable as a data package other
-  tools can consume?
+Settled by the owner on 2026-11-12 (these were the open questions of the first draft):
+
+- **Target style**: plain NumPy only. No helper module, not even opt-in; a
+  construct with no clean NumPy idiom is `guided` or `unsupported`, not emulated.
+- **Octave in CI**: the Ubuntu LTS apt package (`apt-get install octave` on
+  `ubuntu-24.04`), not a pinned container image. CI sets
+  `DUALECT_REQUIRE_OCTAVE=1` so Octave tests fail instead of skipping there.
+- **Verify tolerance**: a global default (`rtol=1e-9`, `atol=1e-12`, in
+  `dualect/compare.py`) with a per-rule override in `rule.yaml`
+  (`tolerance: {rtol: ..., atol: ...}`).
+- **Where rules live**: in this repository only (a built wheel carries a copy so
+  an installed `dualect` still finds them). No separate data package.
+- **LLM calls**: dualect itself never calls an LLM API. The guided path only
+  *produces context* (`dualect context`, later the MCP server); whichever LLM the
+  user runs does the translating, and its output comes back through `verify`.
+
+### 12.1 Verify semantics (milestone 1)
+
+How `dualect verify a.m a.py` and the rule-case tests decide two scripts agree:
+
+- A script's outputs are the variables it leaves in its workspace. The `.m`
+  side runs via oct2py (`source`, in a cleared workspace); the `.py` side runs in
+  a fresh namespace. `ans`, `_`-prefixed names, modules, classes and `def`
+  functions are not outputs.
+- Every `.m` output must exist in Python with an equal value. Python-only names
+  are allowed (idiomatic code may need temporaries) and listed in the report. A
+  pair that compares nothing fails.
+- Values: `numpy.allclose` with NaN equal to NaN; singleton dimensions ignored
+  (Octave's `1xN` equals a NumPy 1-D array) but other shapes must match; two
+  empty arrays are equal; logical vs numeric is a mismatch; int vs float is not.
+  Structs compare as dicts, cells as lists (column-major order). Function
+  handles and lambdas only agree on *being* callable.
+- Directives in comments of either file: `% dualect: index i j` (1-based in
+  `.m`, 0-based in Python, compared as `m - 1`) and `% dualect: ignore k`
+  (e.g. a loop variable whose final value legitimately differs). Unknown
+  directives are errors, so a typo cannot silently weaken a check.
+- `.m` case scripts that define functions start with `1;` and define them before
+  use: Octave does not accept functions at the end of a script.

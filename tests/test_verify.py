@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Evan Gress
+
+"""The verify harness on hand-written pairs, and directive parsing."""
+
+from pathlib import Path
+
+import pytest
+from conftest import DATA_DIR
+
+from dualect.errors import DirectiveError, ExecutionError
+from dualect.runners import MRunner, run_py_script
+from dualect.verify import parse_directives, verify_pair
+
+
+def test_parse_directives_both_comment_styles() -> None:
+    text = "% dualect: index i, j\n# dualect: ignore k\nx = 1;\n"
+    index_vars, ignore = parse_directives(text=text, path=Path("t.m"))
+    assert index_vars == {"i", "j"}
+    assert ignore == {"k"}
+
+
+@pytest.mark.parametrize(
+    "line", ["% dualect: indexes i", "# dualect: ignore", "% dualect: index 1x"]
+)
+def test_bad_directive_is_an_error(line: str) -> None:
+    with pytest.raises(DirectiveError):
+        parse_directives(text=line, path=Path("t.m"))
+
+
+def test_python_runner_drops_scaffolding(tmp_path: Path) -> None:
+    script = tmp_path / "s.py"
+    script.write_text(
+        "import numpy as np\nfrom math import sqrt\n_tmp = 1\n"
+        "def helper():\n    return 1\nf = lambda t: t\nx = sqrt(4.0)\n"
+    )
+    outputs = run_py_script(path=script)
+    assert set(outputs) == {"f", "x"}
+
+
+def test_python_failure_is_named(tmp_path: Path) -> None:
+    script = tmp_path / "bad.py"
+    script.write_text("x = 1 / 0\n")
+    with pytest.raises(ExecutionError) as info:
+        run_py_script(path=script)
+    assert info.value.side == "py"
+
+
+@pytest.mark.octave
+def test_hand_written_pair_passes(m_runner: MRunner) -> None:
+    result = verify_pair(m_path=DATA_DIR / "beam.m", py_path=DATA_DIR / "beam.py", runner=m_runner)
+    assert result.ok, result.report()
+    names = {var.name for var in result.variables}
+    assert {"w", "tip", "imax"} <= names
+
+
+@pytest.mark.octave
+def test_wrong_translation_fails(m_runner: MRunner, tmp_path: Path) -> None:
+    # The classic off-by-one: end-2:end is three elements, not two.
+    m_file = tmp_path / "t.m"
+    py_file = tmp_path / "t.py"
+    m_file.write_text("x = 1:5;\ntail = x(end-2:end);\n")
+    py_file.write_text("import numpy as np\nx = np.arange(1, 6)\ntail = x[-2:]\n")
+    result = verify_pair(m_path=m_file, py_path=py_file, runner=m_runner)
+    assert not result.ok
+    assert [var.name for var in result.variables if not var.ok] == ["tail"]
+
+
+@pytest.mark.octave
+def test_missing_python_variable_fails(m_runner: MRunner, tmp_path: Path) -> None:
+    m_file = tmp_path / "t.m"
+    py_file = tmp_path / "t.py"
+    m_file.write_text("a = 1;\nb = 2;\n")
+    py_file.write_text("a = 1\n")
+    result = verify_pair(m_path=m_file, py_path=py_file, runner=m_runner)
+    assert not result.ok
+    assert "missing" in result.report()
+
+
+@pytest.mark.octave
+def test_nothing_compared_fails(m_runner: MRunner, tmp_path: Path) -> None:
+    m_file = tmp_path / "t.m"
+    py_file = tmp_path / "t.py"
+    m_file.write_text("% only a comment\n")
+    py_file.write_text("# only a comment\n")
+    result = verify_pair(m_path=m_file, py_path=py_file, runner=m_runner)
+    assert not result.ok
+
+
+@pytest.mark.octave
+def test_logical_type_is_preserved(m_runner: MRunner, tmp_path: Path) -> None:
+    m_file = tmp_path / "t.m"
+    m_file.write_text("mask = [1 2 3] > 1;\nflag = true;\n")
+    outputs = m_runner.run(path=m_file)
+    assert outputs["mask"].dtype == bool
+    assert outputs["flag"].dtype == bool
+
+
+@pytest.mark.octave
+def test_octave_failure_is_named(m_runner: MRunner, tmp_path: Path) -> None:
+    m_file = tmp_path / "bad.m"
+    m_file.write_text("x = [1 2 3];\ny = x(5);\n")
+    with pytest.raises(ExecutionError) as info:
+        m_runner.run(path=m_file)
+    assert info.value.side == "m"
+    # The session stays usable after an error.
+    ok_file = tmp_path / "ok.m"
+    ok_file.write_text("z = 2;\n")
+    assert m_runner.run(path=ok_file) == {"z": 2.0}

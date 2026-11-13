@@ -3,7 +3,8 @@
 Translate numeric code between Octave/MATLAB-style `.m` files and Python/NumPy,
 in both directions, with every translation **verified by running both sides**.
 
-> **Status: design phase.** Nothing is installable yet. See [docs/design.md](docs/design.md).
+> **Status: early skeleton.** `dualect verify` and the rule tooling work; scanning and
+> translating are not built yet. See [docs/design.md](docs/design.md) section 11.
 
 ## Why
 
@@ -16,12 +17,24 @@ or built-in (indexing with `end`, `*` vs `.*`, `linspace`, ...). Dependable rule
 a scripted translator; the rest are handed to an LLM as focused context; every
 result is executed and compared.
 
-## Planned usage
+## Usage
+
+```bash
+uv sync --all-groups                      # install (Python 3.11+, uv)
+uv run dualect verify script.m script.py  # run both sides, compare every variable
+uv run dualect rules list [--status guided]
+uv run dualect rules new indexing/foo     # scaffold a rule folder
+uv run pytest                             # validate rules, execute every case pair
+```
+
+`verify` needs GNU Octave (`brew install octave`, `apt install octave`).
+
+Planned, not built yet:
 
 ```bash
 dualect scan script.m                     # which rules does this file need?
+dualect context script.m                  # LLM-ready context for those rules
 dualect translate script.m -o script.py   # translate (scripted + LLM-guided)
-dualect verify script.m script.py         # run both, compare outputs
 ```
 
 ## License

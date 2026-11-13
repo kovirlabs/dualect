@@ -1,0 +1,170 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Evan Gress
+
+"""The ``dualect`` command (docs/design.md section 8).
+
+::
+
+    dualect scan script.m                  # milestone 3
+    dualect context script.m               # milestone 3
+    dualect translate script.m -o out.py   # milestone 4
+    dualect verify script.m script.py      # run both, compare
+    dualect rules list [--status guided]
+    dualect rules new indexing/foo
+
+Exit codes: 0 success; 1 verification or validation failed, or an error was
+reported; 2 bad command-line usage (argparse); 3 command not implemented yet.
+"""
+
+import argparse
+import dataclasses
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+from dualect import __version__
+from dualect.compare import DEFAULT_ATOL, DEFAULT_RTOL, Tolerance
+from dualect.errors import DualectError
+from dualect.paths import default_rules_dir
+from dualect.rulebook import Status, load_rules
+from dualect.scaffold import new_rule
+from dualect.verify import options_for_pair, verify_pair
+
+EXIT_OK = 0
+EXIT_FAILED = 1
+EXIT_NOT_IMPLEMENTED = 3
+
+#: Commands that parse their arguments but are built in a later milestone.
+_PLANNED = {
+    "scan": "milestone 3 (scanner + context command)",
+    "context": "milestone 3 (scanner + context command)",
+    "translate": "milestone 4 (deterministic translators)",
+}
+
+
+def _not_implemented(args: argparse.Namespace) -> int:
+    """Report a planned command honestly instead of pretending to run it."""
+    print(
+        f"dualect {args.command}: not implemented yet; planned for "
+        f"{_PLANNED[args.command]}, see docs/design.md section 11",
+        file=sys.stderr,
+    )
+    return EXIT_NOT_IMPLEMENTED
+
+
+def _verify(args: argparse.Namespace) -> int:
+    """Handle ``dualect verify``."""
+    options = options_for_pair(
+        m_path=args.m_file,
+        py_path=args.py_file,
+        tolerance=Tolerance(rtol=args.rtol, atol=args.atol),
+        extra_index=args.index,
+    )
+    if args.ignore:
+        options = dataclasses.replace(options, ignore=options.ignore | frozenset(args.ignore))
+    result = verify_pair(m_path=args.m_file, py_path=args.py_file, options=options)
+    print(result.report())
+    return EXIT_OK if result.ok else EXIT_FAILED
+
+
+def _rules_list(args: argparse.Namespace) -> int:
+    """Handle ``dualect rules list``."""
+    status = Status(args.status) if args.status else None
+    rules = load_rules(rules_dir=args.rules_dir, status=status)
+    if not rules:
+        print("no rules found", file=sys.stderr)
+        return EXIT_OK
+    width = max(len(rule.id) for rule in rules)
+    for rule in rules:
+        print(
+            f"{rule.id:<{width}}  {rule.status.value:<11}  {len(rule.cases):>2} cases  {rule.title}"
+        )
+    return EXIT_OK
+
+
+def _rules_new(args: argparse.Namespace) -> int:
+    """Handle ``dualect rules new``."""
+    rule_dir = new_rule(rules_dir=args.rules_dir, rule_id=args.rule_id)
+    print(f"created {rule_dir}")
+    print("next: fill in rule.yaml and cases/basic.m + basic.py, remove every TODO")
+    return EXIT_OK
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser (exposed for tests and documentation)."""
+    parser = argparse.ArgumentParser(
+        prog="dualect",
+        description="Translate numeric code between .m files and Python/NumPy, verified.",
+    )
+    parser.add_argument("--version", action="version", version=f"dualect {__version__}")
+    commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+
+    scan = commands.add_parser("scan", help="list the rules a file needs (not implemented yet)")
+    scan.add_argument("source", type=Path)
+    scan.set_defaults(handler=_not_implemented)
+
+    context = commands.add_parser(
+        "context", help="print LLM-ready context for a file (not implemented yet)"
+    )
+    context.add_argument("source", type=Path)
+    context.set_defaults(handler=_not_implemented)
+
+    translate = commands.add_parser("translate", help="translate a file (not implemented yet)")
+    translate.add_argument("source", type=Path)
+    translate.add_argument("-o", "--output", type=Path)
+    translate.add_argument("--strict", action="store_true", help="stop at unsupported constructs")
+    translate.add_argument("--dialect", help="source dialect and version, e.g. matlab@R2023a")
+    translate.set_defaults(handler=_not_implemented)
+
+    verify = commands.add_parser("verify", help="run a .m and a .py script and compare outputs")
+    verify.add_argument("m_file", type=Path)
+    verify.add_argument("py_file", type=Path)
+    verify.add_argument("--rtol", type=float, default=DEFAULT_RTOL, help="relative tolerance")
+    verify.add_argument("--atol", type=float, default=DEFAULT_ATOL, help="absolute tolerance")
+    verify.add_argument(
+        "--index",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="variable holding indices (1-based in .m, 0-based in Python); repeatable",
+    )
+    verify.add_argument(
+        "--ignore", action="append", default=[], metavar="NAME", help="skip a variable; repeatable"
+    )
+    verify.set_defaults(handler=_verify)
+
+    rules = commands.add_parser("rules", help="inspect or create rules")
+    rules.add_argument(
+        "--rules-dir",
+        type=Path,
+        default=None,
+        help="rules folder (default: the repository's rules/ or $DUALECT_RULES_DIR)",
+    )
+    rule_commands = rules.add_subparsers(dest="rules_command", required=True, metavar="ACTION")
+    listing = rule_commands.add_parser("list", help="list rules with status and case count")
+    listing.add_argument("--status", choices=[status.value for status in Status])
+    listing.set_defaults(handler=_rules_list)
+    create = rule_commands.add_parser("new", help="scaffold rules/<category>/<rule-id>/")
+    create.add_argument("rule_id", metavar="CATEGORY/ID")
+    create.set_defaults(handler=_rules_new)
+
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line; returns the process exit code.
+
+    :param argv: arguments without the program name (default: ``sys.argv[1:]``).
+    """
+    args = build_parser().parse_args(argv)
+    if getattr(args, "rules_dir", None) is None and args.command == "rules":
+        args.rules_dir = default_rules_dir()
+    try:
+        return int(args.handler(args))
+    except DualectError as exc:
+        print(f"dualect: {exc}", file=sys.stderr)
+        return EXIT_FAILED
+
+
+if __name__ == "__main__":
+    sys.exit(main())
