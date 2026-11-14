@@ -6,7 +6,8 @@
 ``numel`` is ``x.size`` (``len`` for a string); ``size(A)`` and ``size(A, d)``
 read ``A.shape`` for a matrix. A vector is 1-D in NumPy, so its sizes are
 spelled out from its known orientation (``size(v, 1)`` of a row is 1).
-``length`` is the largest dimension.
+``length`` is the largest dimension. ``ndims`` is 2 for every value but a
+2-D (or larger) array, which reads ``A.ndim``.
 """
 
 import ast
@@ -52,6 +53,14 @@ def translate(node: ir.Call, ctx: Context) -> ast.expr:
     expr = ctx.expr(node.args[0])
     if node.func == "numel" and len(node.args) == 1:
         return _count(expr, info, ctx)
+    if node.func == "ndims" and len(node.args) == 1:
+        # Every .m value has at least two dimensions; NumPy's 1-D vectors and
+        # Python scalars have fewer, so only a 2-D array reads its own ndim.
+        if info.is_matrix:
+            return ast.Attribute(value=expr, attr="ndim")
+        if info.is_vector or info.is_scalar or info.kind is Kind.STRING:
+            return ast.Constant(2)
+        ctx.decline("ndims of a value whose shape is unknown")
     if node.func == "length" and len(node.args) == 1:
         if info.is_matrix or info.kind is Kind.EMPTY:
             return ctx.call(ast.Name("max"), ast.Attribute(value=expr, attr="shape"))
@@ -160,6 +169,13 @@ def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
     if isinstance(node, ast.Attribute):
         if node.attr == "shape":
             return lift_shape(node, ctx)
+        if node.attr == "ndim":
+            dims = ctx.info(node.value)
+            if dims.is_matrix:
+                return ctx.call("ndims", ctx.expr(node.value), loc=loc)
+            if dims.is_vector:
+                return ctx.num(1, loc=loc)  # NumPy's count; ndims would say 2
+            ctx.decline(".ndim of a value that is not a known array")
         info = ctx.info(node.value)
         if not (info.is_array or info.is_scalar):
             ctx.assume(f"{ast.unparse(node.value)} is an array")

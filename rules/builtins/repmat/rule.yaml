@@ -1,0 +1,33 @@
+id: builtins/repmat
+title: "`repmat`: tiling rows, columns and matrices"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:repmat]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.tile
+octave: |
+  T = repmat(A, 2, 3);        % 2 x 3 copies of A
+  w = repmat(v, 1, 3);        % a row three times as long
+  W = repmat(c, 1, 3);        % three copies of a column, side by side
+python: |
+  T = np.tile(A, (2, 3))
+  w = np.tile(v, 3)
+  W = np.tile(c[:, np.newaxis], (1, 3))
+why: >
+  `repmat(A, m, n)` tiles `A` m times down and n times across, which is
+  `np.tile(A, (m, n))` for a matrix. Vectors need care because NumPy's 1-D
+  arrays have no orientation and `np.tile` treats them as rows: a column
+  repeated sideways must first get its column axis (`c[:, np.newaxis]`), and a
+  row repeated across stays 1-D only with a single count, `np.tile(v, n)`.
+pitfalls:
+  - >-
+    `np.tile(c, (1, 3))` of a 1-D column gives one long row, not a 3-column
+    matrix: NumPy reads a 1-D array as a row.
+  - >-
+    `repmat(A, n)` is n x n copies, not n copies side by side.
+  - >-
+    A count of 0 gives an empty result on both sides.
+related: [builtins/concatenation-functions, builtins/meshgrid]
+python_imports: [import numpy as np]

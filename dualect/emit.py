@@ -150,9 +150,14 @@ class Context:
             s.name: s for s in scan.program.body if isinstance(s, ir.FunctionDef)
         }
         self.loop_stack: list[ir.Stmt] = []
+        #: The statement being translated (a rule may need its target's name).
+        self.current: ir.Stmt | None = None
         self.indent = 0
         self.reports: list[StmtReport] = []
         self.directives: set[str] = set()
+        #: File-level verification directives (``stdout``, ``shape r``) that
+        #: the translation needs, written below the imports.
+        self.file_directives: list[str] = []
         self.source_lines = scan.program_text.splitlines() if scan.program_text else []
 
     # --- facts -------------------------------------------------------------
@@ -171,6 +176,15 @@ class Context:
             return []
         self.directives.add(name)
         return [self.line(f"# dualect: index {name}")]
+
+    def file_directive(self, text: str) -> None:
+        """Ask for a ``# dualect: <text>`` line at the top of the output.
+
+        A translation that prints adds ``stdout`` so verification compares the
+        printed text; one that draws random numbers adds ``shape <name>``.
+        """
+        if text not in self.file_directives:
+            self.file_directives.append(text)
 
     def is_index_var(self, name: str) -> bool:
         """Whether ``name`` is stored 0-based in the output (see :func:`index_variables`)."""
@@ -375,14 +389,20 @@ class Context:
             return self.hole(stmt, report)
         saved_imports = set(self.imports)
         saved_directives = set(self.directives)
+        saved_file_directives = list(self.file_directives)
         # Nested statements record their own assumptions; a compound statement's
         # note must only carry what was assumed for its own header.
         outer_assumptions = self.assumptions
         self.assumptions = []
+        outer_stmt, self.current = self.current, stmt
         try:
-            return self._translate_planned(stmt, report, saved_imports, saved_directives)
+            lines = self._translate_planned(stmt, report, saved_imports, saved_directives)
         finally:
             self.assumptions = outer_assumptions
+            self.current = outer_stmt
+        if report.status is not Status.MECHANICAL:
+            self.file_directives = saved_file_directives
+        return lines
 
     def _translate_planned(
         self,
@@ -434,6 +454,13 @@ class Context:
             case ir.ExprStmt(value=value):
                 if "syntax:script-marker" in stmt.syntax:
                     return []
+                if isinstance(value, ir.Call) and not (value.local or value.handle):
+                    # A call made for its effect (printing) may need statements,
+                    # such as a loop that recycles a format over an array.
+                    module = self.stmt_translator(primary_tag(value, self.analysis) or "")
+                    hook = getattr(module, "translate_call_statement", None)
+                    if hook is not None:
+                        return self._lines(hook(stmt, self))
                 return [Line(self.indent, ast.unparse(self.expr(value)))]
         primary = primary_tag(stmt, self.analysis)
         if primary is None:
@@ -463,7 +490,10 @@ class Context:
             return self._lines(self.stmt_translator("assign:multi").translate(stmt, self))
         target = targets[0]
         if isinstance(target, ir.Index):
-            module = self.stmt_translator("index:paren")
+            findings = self.scan.uses_by_stmt.get(id(stmt), [])
+            # A store past the end grows the array: that rule's business.
+            tag = "assign:grow" if any(f.tag == "assign:grow" for f in findings) else "index:paren"
+            module = self.stmt_translator(tag)
             return self._lines(module.translate_store(stmt, self))
         if not isinstance(target, ir.Name):
             raise _Unsupported(primary_tag(target, self.analysis) or "parse:error", None)

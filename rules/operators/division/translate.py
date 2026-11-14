@@ -49,7 +49,24 @@ def translate(node: ir.BinOp, ctx: Context) -> ast.expr:
             return ast.BinOp(left=ctx.expr(node.right), op=ast.Div(), right=ctx.expr(node.left))
         if left.is_matrix and left.rows is not None and left.rows == left.cols:
             return ctx.call(ctx.np("linalg.solve"), ctx.expr(node.left), ctx.expr(node.right))
-        ctx.decline("left division by a matrix that is not known to be square")
+        if (
+            left.is_matrix
+            and left.rows is not None
+            and left.cols is not None
+            and left.rows > left.cols
+        ):
+            # Overdetermined: the least-squares solution. The source's QR gives
+            # the same answer when A has full column rank (otherwise a "basic"
+            # solution, not NumPy's minimum-norm one), so that is assumed.
+            ctx.assume("full column rank in a least-squares solve")
+            solved = ctx.call(
+                ctx.np("linalg.lstsq"),
+                ctx.expr(node.left),
+                ctx.expr(node.right),
+                rcond=ast.Constant(None),
+            )
+            return ast.Subscript(value=solved, slice=ast.Constant(0))
+        ctx.decline("left division by a matrix that is not known to be square or tall")
     ctx.decline(f"operator {node.op}")
 
 

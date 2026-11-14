@@ -82,3 +82,17 @@ def test_corpus_statements_are_all_lowered() -> None:
         program = lower_source(text=source.read_text(encoding="utf-8"), name=source.name)
         opaque = [s for s in ir.walk_stmts(program.body) if isinstance(s, ir.OpaqueStmt)]
         assert opaque == [], source.name
+
+
+#: Corpus files every statement of which has a mechanical translation (both
+#: directions are then verified by the tests above and in test_reverse.py).
+COMPLETE = {"beam_deflection", "ode_rk4", "signal_filter"}
+
+
+@pytest.mark.parametrize("name", sorted(COMPLETE))
+def test_corpus_file_translates_completely(name: str, tmp_path: Path) -> None:
+    source = REPO_ROOT / "corpus" / f"{name}.m"
+    result = translate_file(
+        source=source, output=tmp_path / f"{name}.py", rules=RULES, dialect=Dialect(), verify=False
+    )
+    assert result.complete, result.report()

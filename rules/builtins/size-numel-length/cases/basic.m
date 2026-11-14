@@ -10,3 +10,7 @@ nv = numel(v);
 e = [];
 Le = length(e);
 ne = numel(e);
+dA = ndims(A);
+dv = ndims(v);      % 2, although v is 1-D in NumPy
+name = 'beam';
+nc = numel(name);

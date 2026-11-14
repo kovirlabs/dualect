@@ -1,0 +1,42 @@
+id: builtins/rand-randn
+title: "`rand` and `randn`: random numbers (compared by shape only)"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:rand, call:randn]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.random.default_rng
+    - py:method:random
+    - py:method:standard_normal
+    - py:call:np.random.rand
+    - py:call:np.random.randn
+octave: |
+  U = rand(3, 2);             % uniform on (0, 1)
+  z = randn(1, 5);            % standard normal, a row
+python: |
+  U = np.random.default_rng().random((3, 2))
+  z = np.random.default_rng().standard_normal(5)
+why: >
+  NumPy's Generator API draws uniform numbers with `random(size)` and normal
+  ones with `standard_normal(size)`, where `size` is a tuple `(m, n)` or a
+  count for 1-D (the legacy `np.random.rand(m, n)` is discouraged). In a real
+  program create one generator, `rng = np.random.default_rng()`, and reuse it;
+  the translation writes it inline so each call stays one expression. Neither
+  draws the source's numbers. Because the numbers differ, verification
+  compares a random result by shape only: the translation adds a
+  `dualect: shape <name>` directive for a variable assigned straight from
+  `rand`/`randn`. Anything computed from random numbers still differs and
+  fails verification, unless annotated the same way by hand.
+pitfalls:
+  - >-
+    `rand(3)` is 3x3, while `rng.random(3)` is three numbers.
+  - >-
+    The two languages' generators and seeds are unrelated: `rand('seed', 1)`
+    and `np.random.default_rng(1)` give different numbers. Seeding is not
+    translated.
+  - >-
+    Values derived from random numbers (a mean, a sum) cannot be checked by
+    value; mark them `% dualect: shape name` (or `ignore`) to verify the rest.
+related: [builtins/zeros-ones-eye]
+python_imports: [import numpy as np]

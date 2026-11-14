@@ -1,0 +1,36 @@
+id: builtins/diff
+title: "`diff`: differences between neighbouring elements"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:diff]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.diff
+octave: |
+  d = diff(x);            % x(2:end) - x(1:end-1)
+  d2 = diff(x, 2);        % second differences
+  D = diff(A);            % down each column
+python: |
+  d = np.diff(x)
+  d2 = np.diff(x, n=2)
+  D = np.diff(A, axis=0)
+why: >
+  Each difference shortens the data by one along the first non-singleton
+  dimension: down the columns of a matrix. `np.diff` works along the *last*
+  axis by default (along the rows of a 2-D array), so a matrix needs
+  `axis=0`. The order is the second argument in both (`n=` in NumPy).
+pitfalls:
+  - >-
+    `np.diff(A)` of a 2-D array differences along each row; `diff(A)` down
+    each column. Pass `axis=0`.
+  - >-
+    When the order reaches the length of the data, the source moves on to
+    the next dimension instead of returning an empty result
+    (`diff([1 4 9], 3)` is not empty), while NumPy returns an empty array.
+    Only orders known to be smaller than the length are translated.
+  - >-
+    `diff` of a logical array gives numbers; NumPy refuses to subtract
+    booleans, so convert first (`m.astype(int)`).
+related: [builtins/cumsum-cumprod, builtins/sum-mean-max]
+python_imports: [import numpy as np]

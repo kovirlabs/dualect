@@ -1,0 +1,42 @@
+id: builtins/dot-cross-kron
+title: "`dot`, `cross` and `kron`: products of vectors and matrices"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:dot, call:cross, call:kron]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.dot
+    - py:call:np.cross
+    - py:call:np.kron
+octave: |
+  d = dot(u, v);              % sum(u .* v), any orientation
+  w = cross(u, v);            % 3-element vectors
+  K = kron(A, B);
+  M = kron(c, r);             % a column and a row: their outer product
+python: |
+  d = np.dot(u, v)
+  w = np.cross(u, v)
+  K = np.kron(A, B)
+  M = np.outer(c, r)
+why: >
+  For real vectors `dot` is `np.dot` and `cross` is `np.cross`. `kron` is
+  `np.kron` for matrices, but vectors need their orientation, which NumPy's
+  1-D arrays do not keep: the Kronecker product of a column and a row (either
+  order) is the matrix `np.outer(column, row)`, and a column next to a matrix
+  must become a 2-D column first (`c[:, np.newaxis]`).
+pitfalls:
+  - >-
+    `dot` conjugates its first argument for complex data; `np.dot` does not
+    (`np.vdot` does).
+  - >-
+    `dot(A, B)` of matrices is a row of column-wise dot products;
+    `np.dot(A, B)` is the matrix product.
+  - >-
+    `np.kron(c, r)` of two 1-D arrays is a long 1-D array, not the matrix
+    `kron(c, r)` gives for a column and a row.
+  - >-
+    `np.cross` accepts 2-element vectors and returns a scalar; `cross` needs
+    3 elements.
+related: [builtins/norm, operators/matrix-multiply]
+python_imports: [import numpy as np]

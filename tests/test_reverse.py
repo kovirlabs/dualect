@@ -200,9 +200,9 @@ def test_scan_and_context_read_python(tmp_path: Path) -> None:
     source.write_text("import numpy as np\nx = np.zeros(3)\nprint(x)\n", encoding="utf-8")
     result = scan_file(path=source, rules=RULES, dialect=Dialect())
     ids = {rule.id for rule in result.needed_rules()}
-    assert {"builtins/zeros-ones-eye", "io/display"} <= ids
+    assert {"builtins/zeros-ones-eye", "io/printf"} <= ids
     assert result.as_json()["direction"] == "from-python"
-    assert result.status_of(next(r for r in RULES if r.id == "io/display")) is Status.GUIDED
+    assert result.status_of(next(r for r in RULES if r.id == "io/printf")) is Status.MECHANICAL
 
 
 @pytest.mark.octave

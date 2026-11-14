@@ -106,7 +106,7 @@ def test_check_fails_for_a_mechanical_rule_that_does_not_qualify(
     rules_dir = tmp_path / "rules"
     shutil.copytree(RULES_DIR, rules_dir, ignore=shutil.ignore_patterns("__pycache__"))
     case = rules_dir / "operators" / "power" / "cases" / "basic.py"
-    case.write_text(case.read_text(encoding="utf-8").replace("Q = A**2", "Q = A @ A"))
+    case.write_text(case.read_text(encoding="utf-8").replace("Q = A**2.0", "Q = A @ A"))
     code = main(
         ["rules", "--rules-dir", str(rules_dir), "check", "operators/power",
          "--direction", "to-python", "--no-verify"]

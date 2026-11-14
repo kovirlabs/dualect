@@ -12,3 +12,7 @@ nv = v.size
 e = np.array([])
 Le = max(e.shape)
 ne = e.size
+dA = A.ndim
+dv = 2  # 2, although v is 1-D in NumPy
+name = "beam"
+nc = len(name)

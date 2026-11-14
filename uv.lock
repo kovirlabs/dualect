@@ -356,6 +356,8 @@ dependencies = [
     { name = "oct2py" },
     { name = "pyyaml" },
     { name = "ruff" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tree-sitter" },
     { name = "tree-sitter-matlab" },
 ]
@@ -377,6 +379,7 @@ requires-dist = [
     { name = "oct2py", specifier = ">=5.8" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.8" },
+    { name = "scipy", specifier = ">=1.13" },
     { name = "tree-sitter", specifier = ">=0.24" },
     { name = "tree-sitter-matlab", specifier = ">=1.3.3,<2" },
 ]

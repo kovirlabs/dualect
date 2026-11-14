@@ -1,0 +1,53 @@
+id: io/printf
+title: "Formatted output: `printf`, `fprintf`, `sprintf`, `disp`"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:printf, call:fprintf, call:sprintf, call:disp]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:print
+    - py:fstring
+    - py:method:join
+octave: |
+  fprintf('%5.2f m\n', x);
+  fprintf('%d\n', [1 2 3]);      % the format repeats per element
+  s = sprintf('%d items', n);
+  disp(s)
+python: |
+  print(f"{x:5.2f} m")
+  for value in np.array([1, 2, 3]):
+      print(f"{int(value)}")
+  s = f"{int(n)} items"
+  print(s)
+why: >
+  A printf format maps onto an f-string field by field: `%5.2f` is
+  `{x:5.2f}`, `%-8s` is `{s:<8}`, `%+.3e` is `{x:+.3e}`, `%%` is `%`, and the
+  `\n` that ends a line becomes print's own newline. The difference is
+  recycling: printf repeats its format while values remain, so one call with an
+  array prints once per element (column-major) and needs a loop in Python, and
+  output stops at the first conversion that has no value left.
+pitfalls:
+  - >-
+    `%d` of a value that is not a whole number does not round or truncate:
+    Octave prints it in another format (`sprintf('%d', 1.5)` is `1.5`). Only
+    values known to be whole numbers are translated, as `{int(x)}`.
+  - >-
+    `fprintf('%d %d\n', 1, 2, 3)` prints `1 2` and then `3 ` with no newline:
+    output stops at the first conversion without a value.
+  - >-
+    Octave prints `Inf` and `NaN`; Python prints `inf` and `nan`.
+  - >-
+    `%s` of a number prints it as a character code (`sprintf('%s', 65)` is
+    `A`), and `%d` of a string prints its character codes.
+  - >-
+    Python left-aligns strings in a field and printf right-aligns them:
+    `%5s` is `{s:>5}`.
+  - >-
+    `disp` of a number uses the interpreter's display format (`disp(0.1)`
+    prints `0.1000`), not `str`; format it explicitly instead.
+  - >-
+    `fprintf(fid, ...)` with a file id writes to a file: `print(..., file=f)`.
+    Only `fprintf(1, ...)` (standard output) is translated.
+related: [io/display, types/char-strings]
+python_imports: []

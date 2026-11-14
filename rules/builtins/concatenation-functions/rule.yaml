@@ -1,0 +1,35 @@
+id: builtins/concatenation-functions
+title: "`horzcat`, `vertcat` and `cat`: concatenation as functions"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:horzcat, call:vertcat, call:cat]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.hstack
+octave: |
+  r = horzcat(a, b);          % [a, b]
+  C = vertcat(A, B);          % [A; B]
+  D = cat(2, A, B);           % [A, B]
+python: |
+  r = np.concatenate((a, b))
+  C = np.vstack((A, B))
+  D = np.column_stack((A, B))
+why: >
+  These are the bracket literals spelled as functions: `horzcat(a, b)` is
+  `[a, b]`, `vertcat(a, b)` is `[a; b]`, and `cat(dim, ...)` joins along
+  dimension `dim` (1 down, 2 across). In NumPy the right function depends on
+  what is joined, because rows and columns are both 1-D: two rows joined
+  across are `np.concatenate`, two columns joined down too, but columns joined
+  across are `np.column_stack`.
+pitfalls:
+  - >-
+    `np.hstack` of two 1-D columns joins them end to end into one longer 1-D
+    array, not a two-column matrix: that is `np.column_stack`.
+  - >-
+    `cat(1, ...)` stacks vertically: dimension 1 is the rows, NumPy's
+    `axis=0`.
+  - >-
+    Empty parts (`[]`) are skipped in either direction.
+related: [syntax/array-literals, builtins/repmat]
+python_imports: [import numpy as np]

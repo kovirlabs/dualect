@@ -1,8 +1,8 @@
 id: builtins/size-numel-length
-title: "`size`, `numel`, `length`"
+title: "`size`, `numel`, `length`, `ndims`"
 status: mechanical
 dialects: [octave, matlab]
-match: [call:size, call:numel, call:length]
+match: [call:size, call:numel, call:length, call:ndims]
 from_python:                  # the Python -> .m direction
   status: mechanical
   match:
@@ -10,6 +10,7 @@ from_python:                  # the Python -> .m direction
     - py:attr:shape
     - py:call:len
     - py:call:np.size
+    - py:attr:ndim
 octave: |
   [r, c] = size(A);
   r = size(A, 1);
@@ -28,6 +29,9 @@ why: >
 pitfalls:
   - >-
     `length` of a 2x5 matrix is 5, while `len(A)` is 2.
+  - >-
+    `ndims` of a vector or a scalar is 2; the NumPy 1-D array's `ndim` is 1
+    and a Python number has none.
   - >-
     Octave arrays are at least 2-D: for a row vector `size(v)` is `[1 n]` and
     `size(v, 1)` is 1, but a 1-D NumPy array has shape `(n,)` and

@@ -16,14 +16,21 @@ Facts describe *NumPy* semantics: a :attr:`PyKind.VECTOR` is a 1-D array
 array. The analysis is flow-sensitive within a body, joins branches, runs loop
 bodies to a fixed point and analyses each function (and lambda) once for the
 join of the arguments at its call sites, like :mod:`dualect.infer`.
+
+A rule teaches the analysis what its calls return with
+``pyinfer_call(tag, node, args, keywords, receiver)`` in its ``translate.py``
+(``tag`` is the call's construct tag, ``py:call:np.cumsum`` or
+``py:method:cumsum``; ``receiver`` the facts of a method's object).
 """
 
 from __future__ import annotations
 
 import ast
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from types import ModuleType
 
 
 class PyKind(StrEnum):
@@ -232,9 +239,14 @@ def dotted(node: ast.expr, alias: str | None) -> str | None:
     return None
 
 
+#: Python construct tag of a call -> the translator module of its rule, if any.
+PyCallHook = Callable[[str], ModuleType | None]
+
+
 class _Inferrer:
-    def __init__(self, module: ast.Module) -> None:
+    def __init__(self, module: ast.Module, hook: PyCallHook | None = None) -> None:
         self.module = module
+        self.hook = hook
         self.analysis = PyAnalysis()
         self.defs: dict[str, ast.FunctionDef] = {}
         for stmt in module.body:
@@ -455,8 +467,17 @@ class _Inferrer:
                 return self.call(node, env)
             case ast.Lambda():
                 return PyInfo(kind=PyKind.FUNC, func=node)
-            case ast.JoinedStr():
+            case ast.JoinedStr(values=values):
+                for piece in values:
+                    if isinstance(piece, ast.FormattedValue):
+                        self.expr(piece.value, env)
                 return PyInfo(kind=PyKind.STRING)
+            case ast.ListComp(elt=elt, generators=[generator]) if not generator.ifs:
+                # One `for` clause: the element is analysed with its target bound.
+                item = self.element(self.expr(generator.iter, env), generator.iter)
+                bound = self.bind(generator.target, item, dict(env), None)
+                self.expr(elt, bound)
+                return PyInfo(kind=PyKind.LIST)
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.expr):
                 self.expr(child, env)
@@ -590,11 +611,25 @@ class _Inferrer:
         keywords = {k.arg: self.expr(k.value, env) for k in node.keywords if k.arg is not None}
         func = node.func
         name = dotted(func, alias)
+        receiver: PyInfo | None = None
+        if name is None and isinstance(func, ast.Attribute):
+            receiver = self.expr(func.value, env)
+        hooked = self._hook(node, args, keywords, receiver)
+        if hooked is not None:
+            return hooked
         if name is not None:
             return self.numpy_call(name[3:], node, args, keywords)
         if isinstance(func, ast.Attribute):
-            receiver = self.expr(func.value, env)
-            return self.method(func.attr, receiver, args, keywords)
+            assert receiver is not None
+            result = self.method(func.attr, receiver, args, keywords)
+            target = node.args[0] if node.args else None
+            if func.attr == "astype" and isinstance(target, ast.Name):
+                # x.astype(float): the element type is the one named.
+                dtypes = {"float": DType.FLOAT, "bool": DType.BOOL, "int": DType.INT}
+                result = replace(result, dtype=dtypes.get(target.id, DType.UNKNOWN))
+                if target.id == "bool":
+                    result = replace(result, finite=True, nonneg=True)
+            return result
         if isinstance(func, ast.Name):
             fname = func.id
             self.analysis.infos[id(func)] = env.get(fname, UNKNOWN)
@@ -609,6 +644,33 @@ class _Inferrer:
                 return UNKNOWN
             return _builtin(fname, args)
         return UNKNOWN
+
+    def _hook(
+        self,
+        node: ast.Call,
+        args: list[PyInfo],
+        keywords: dict[str, PyInfo],
+        receiver: PyInfo | None,
+    ) -> PyInfo | None:
+        """Ask the rule covering a call for the facts of its result."""
+        if self.hook is None:
+            return None
+        func = node.func
+        name = dotted(func, self.analysis.numpy_alias)
+        if name is not None:
+            tag = f"py:call:{name}"
+        elif isinstance(func, ast.Attribute):
+            tag = f"py:method:{func.attr}"
+        elif isinstance(func, ast.Name) and func.id not in self.defs:
+            tag = f"py:call:{func.id}"
+        else:
+            return None
+        module = self.hook(tag)
+        function = getattr(module, "pyinfer_call", None) if module is not None else None
+        if not callable(function):
+            return None
+        result = function(tag, node, args, keywords, receiver)
+        return result if isinstance(result, PyInfo) else None
 
     def lambda_call(self, lam: ast.Lambda, args: list[PyInfo], env: Env) -> PyInfo:
         """A lambda's result for this call; its body is annotated for every call."""
@@ -661,7 +723,7 @@ class _Inferrer:
                 PyKind.VECTOR, DType.INT if ints else DType.FLOAT, finite=True, nonneg=nonneg
             )
         if name in ELEMENTWISE:
-            shape = _broadcast(first, args[1]) if len(args) == 2 else _as_array(first)
+            shape = _broadcast(first, args[1]) if len(args) == 2 else as_array(first)
             if shape.kind is PyKind.UNKNOWN:
                 return UNKNOWN
             dtype = DType.BOOL if name in _BOOL_RESULT else DType.FLOAT
@@ -685,7 +747,7 @@ class _Inferrer:
             return scalar(DType.INT, nonneg=True)
         if name in ("maximum", "minimum", "fmax", "fmin"):
             second = args[1] if len(args) > 1 else UNKNOWN
-            shape = _broadcast(_as_array(first), _as_array(second))
+            shape = _broadcast(as_array(first), as_array(second))
             return replace(
                 shape,
                 dtype=_promote(first.dtype, second.dtype),
@@ -694,11 +756,11 @@ class _Inferrer:
                 view=False,
             )
         if name == "clip":
-            return replace(_as_array(first), finite=all(a.finite for a in args), view=False)
+            return replace(as_array(first), finite=all(a.finite for a in args), view=False)
         if name in ("logical_and", "logical_or", "logical_xor", "logical_not"):
-            shape = _as_array(first)
+            shape = as_array(first)
             for other in args[1:]:
-                shape = _broadcast(shape, _as_array(other))
+                shape = _broadcast(shape, as_array(other))
             return replace(
                 shape, dtype=DType.BOOL, finite=True, nonneg=True, value=None, view=False
             )
@@ -856,7 +918,7 @@ def _array_literal(first: PyInfo) -> PyInfo:
     return UNKNOWN
 
 
-def _as_array(info: PyInfo) -> PyInfo:
+def as_array(info: PyInfo) -> PyInfo:
     """A list argument is a 1-D array (or a 2-D one for a list of lists)."""
     if info.kind is PyKind.LIST:
         return _array_literal(info)
@@ -864,7 +926,7 @@ def _as_array(info: PyInfo) -> PyInfo:
 
 
 def _broadcast(a: PyInfo, b: PyInfo) -> PyInfo:
-    a, b = _as_array(a), _as_array(b)
+    a, b = as_array(a), as_array(b)
     if a.is_scalar and b.is_scalar:
         return replace(a, value=None, view=False)
     if a.is_scalar and b.is_array:
@@ -878,7 +940,7 @@ def _broadcast(a: PyInfo, b: PyInfo) -> PyInfo:
 
 
 def _matmul(a: PyInfo, b: PyInfo) -> PyInfo:
-    a, b = _as_array(a), _as_array(b)
+    a, b = as_array(a), as_array(b)
     if not (a.is_array and b.is_array):
         return UNKNOWN
     if a.is_vector and b.is_vector:
@@ -922,6 +984,9 @@ def _builtin(name: str, args: list[PyInfo]) -> PyInfo:
         return scalar(DType.BOOL, nonneg=True)
     if name == "print":
         return PyInfo(kind=PyKind.NONE)
+    if name == "lfilter" and len(args) >= 3:
+        # scipy.signal.lfilter: the shape of the data, in floating point.
+        return replace(as_array(args[2]), dtype=DType.FLOAT, finite=False, value=None, view=False)
     return UNKNOWN
 
 
@@ -931,9 +996,11 @@ def _is_newaxis(node: ast.expr, alias: str | None) -> bool:
     ) == "np.newaxis"
 
 
-def analyze_python(module: ast.Module) -> PyAnalysis:
+def analyze_python(module: ast.Module, *, hook: PyCallHook | None = None) -> PyAnalysis:
     """Infer facts about every expression of a Python module.
 
     :param module: the parsed source.
+    :param hook: a call's construct tag -> the module of its rule, whose
+        ``pyinfer_call`` describes what the call returns.
     """
-    return _Inferrer(module).run()
+    return _Inferrer(module, hook).run()

@@ -14,16 +14,21 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Milestones 1-6 of docs/design.md are done. Both directions work end to end:
-`.m` -> Python (dualect/lower.py, infer.py, emit.py; 30 of 35 rules mechanical)
-and Python -> `.m` (dualect/pyinfer.py, lift.py, memit.py; 29 mechanical), one
+Milestones 1-6 of docs/design.md are done, plus a coverage pass (section 11,
+item 7). Both directions work end to end:
+`.m` -> Python (dualect/lower.py, infer.py, emit.py; 58 of 61 rules mechanical)
+and Python -> `.m` (dualect/pyinfer.py, lift.py, memit.py; 54 mechanical), one
 rule folder per construct serving both (`from_python:` in rule.yaml, `lift()` in
-translate.py, status per direction). `dualect rules check` enforces that every
+translate.py, status per direction; inference facts for a built-in come from
+its rule's `infer_call`/`pyinfer_call`). Still guided: functions/nargout,
+io/display, builtins/tic-toc. `dualect rules check` enforces that every
 status is earned; `dualect mcp` serves scan/get_rule/translate/verify;
 `llms.txt` is generated (`dualect llms-txt -o llms.txt`) and must stay current.
-Adversarial probes live in tests/test_adversarial.py and tests/test_reverse.py.
-Next: more rules (the guided ones, `cumsum`, `filter`, printing), cell arrays
-and structs.
+Verify compares printed output when a script carries `% dualect: stdout`
+(translations that print add it) and random values by shape (`shape r`).
+Adversarial probes live in tests/test_adversarial*.py and tests/test_reverse.py.
+All six corpus scripts are tested; three translate completely both ways.
+Next: cell arrays and structs, `cond`/`ind2sub`-style gaps the corpus shows.
 The project site is `docs/index.html` (GitHub Pages from `/docs`, TagBrush.css);
 keep its numbers in step with README.md and run TagCheck after editing it.
 

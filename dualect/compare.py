@@ -88,6 +88,29 @@ def compare_values(
     return _compare_arrays(m_value=m_value, py_value=py_value, tolerance=tolerance, index=index)
 
 
+def compare_shapes(*, m_value: Any, py_value: Any) -> str | None:
+    """Compare only what two random results must share: shape and logical-ness.
+
+    ``rand(3)`` and ``np.random.rand(3, 3)`` never agree by value; a
+    translation is still wrong if it draws a different number of values or
+    returns a different kind of array.
+
+    :param m_value: value pulled from Octave.
+    :param py_value: value from the Python namespace.
+    :returns: ``None`` if they agree, otherwise a short reason.
+    """
+    m_array, py_array = np.asarray(m_value), np.asarray(py_value)
+    if m_array.dtype.kind not in _NUMERIC_KINDS or py_array.dtype.kind not in _NUMERIC_KINDS:
+        return f"cannot compare {m_array.dtype} with {py_array.dtype}"
+    if (m_array.dtype.kind == "b") != (py_array.dtype.kind == "b"):
+        return f"logical vs numeric: {m_array.dtype} vs {py_array.dtype}"
+    if m_array.size == 0 and py_array.size == 0:
+        return None
+    if _squeezed_shape(m_array) != _squeezed_shape(py_array):
+        return f"shape differs: {m_array.shape} vs {py_array.shape}"
+    return None
+
+
 def _compare_mappings(*, m_value: Any, py_value: Any, tolerance: Tolerance) -> str | None:
     """Compare a struct with a dict field by field."""
     if not (isinstance(m_value, dict) and isinstance(py_value, dict)):

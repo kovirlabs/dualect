@@ -29,6 +29,9 @@ pitfalls:
   - >-
     For a non-square `A`, `A \ b` is the least-squares solution:
     `np.linalg.lstsq(A, b, rcond=None)[0]`. `np.linalg.solve` raises for it.
+    The two agree when `A` has full column rank; for a rank-deficient `A` the
+    source returns a basic solution and NumPy the minimum-norm one, so a tall
+    `A` is translated with that assumption stated, and a wide one is declined.
   - >-
     `1 / 0` is `Inf` in `.m` code but raises ZeroDivisionError for Python
     numbers (NumPy arrays give inf with a warning).

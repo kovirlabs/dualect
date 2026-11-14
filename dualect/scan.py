@@ -14,6 +14,7 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from dualect import ir
@@ -25,6 +26,7 @@ from dualect.lower import lower_parsed
 from dualect.parse import parse_m
 from dualect.rulebook import FROM_PYTHON, TO_PYTHON, Rule, Status
 from dualect.source import OctaveFeature
+from dualect.translators import shared_translator
 
 #: Tag for Octave-only syntax found while scanning for the matlab dialect.
 OCTAVE_ONLY_TAG = "dialect:octave-only"
@@ -57,6 +59,11 @@ class RuleIndex:
     def rule_for(self, tag: str) -> Rule | None:
         """The rule covering ``tag``, or ``None``."""
         return self.by_tag.get(tag)
+
+    def call_hook(self, name: str) -> ModuleType | None:
+        """The translator of the rule covering ``call:<name>`` (for inference hooks)."""
+        rule = self.by_tag.get(f"call:{name}")
+        return shared_translator(rule) if rule is not None else None
 
     def rule_by_id(self, rule_id: str) -> Rule | None:
         """An applicable rule by id, or ``None`` (absent, or not for this dialect)."""
@@ -214,7 +221,7 @@ def scan_text(*, text: str, name: str, index: RuleIndex) -> ScanResult:
     """
     parsed = parse_m(text)
     program = lower_parsed(parsed=parsed, name=name, dialect=index.dialect.name)
-    analysis = analyze(program)
+    analysis = analyze(program, hook=index.call_hook)
     result = ScanResult(
         source_name=name,
         program=program,

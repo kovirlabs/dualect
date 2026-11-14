@@ -1,8 +1,8 @@
 id: functions/multiple-returns
-title: "Multiple return values and `nargout`"
-status: guided
+title: "Multiple return values"
+status: mechanical
 dialects: [octave, matlab]
-match: [func:multi-output, func:nargout, assign:multi, assign:ignore-output]
+match: [func:multi-output, assign:multi, assign:ignore-output]
 from_python:                  # the Python -> .m direction
   status: mechanical
   match:
@@ -34,8 +34,10 @@ pitfalls:
     `[~, i] = max(x)` discards outputs: `_, i = ...`. Built-ins differ: Python's
     reductions return one value, see builtins/sum-mean-max.
   - >-
+    `[a, b] = f(x)` of a function with three outputs takes the first two:
+    `a, b = f(x)[:2]` (plain unpacking would raise).
+  - >-
     Functions that compute optional outputs only `if nargout > 1` always
-    compute everything in a Python tuple; add a flag argument if the extra work
-    is expensive.
-related: [functions/definition, functions/nargin]
+    compute everything in a Python tuple; see functions/nargout.
+related: [functions/definition, functions/nargin, functions/nargout]
 python_imports: [import numpy as np]

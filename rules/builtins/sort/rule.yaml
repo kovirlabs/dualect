@@ -1,0 +1,44 @@
+id: builtins/sort
+title: "`sort`: ascending or descending, with 1-based positions"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:sort]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.sort
+    - py:call:np.argsort
+octave: |
+  s = sort(v);
+  S = sort(A);                % each column
+  d = sort(v, 'descend');
+  [s, i] = sort(v);           % i: 1-based positions
+python: |
+  s = np.sort(v)
+  S = np.sort(A, axis=0)
+  d = np.flip(np.sort(v))
+  i = np.argsort(v, kind="stable")
+  s = v[i]
+why: >
+  `sort` orders a vector, and each column of a matrix (the first non-singleton
+  dimension); `np.sort` orders along the *last* axis, the rows of a 2-D
+  array, so a matrix needs `axis=0`. The positions output is 1-based where
+  `np.argsort` is 0-based. The source's sort is stable (equal values keep
+  their order), NumPy's default quicksort is not, hence `kind="stable"`.
+  NaN goes last ascending and first descending in both.
+pitfalls:
+  - >-
+    `np.sort(A)` of a 2-D array sorts each row; `sort(A)` each column.
+  - >-
+    `np.argsort(v)` without `kind="stable"` may order equal values
+    differently, so the positions of ties differ.
+  - >-
+    The descending positions of equal values keep their original order
+    (`[~, i] = sort([2 1 2], 'descend')` is `1 3 2`), which reversing an
+    ascending sort does not give; `np.argsort(-v, kind="stable")` does, for
+    data without NaN.
+  - >-
+    Complex values are sorted by absolute value in the source and
+    lexicographically in NumPy; they are not translated.
+related: [builtins/sum-mean-max, builtins/unique, builtins/find]
+python_imports: [import numpy as np]

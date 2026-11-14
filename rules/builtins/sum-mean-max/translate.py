@@ -119,19 +119,21 @@ def _pairwise(node: ir.Call, ctx: Context) -> ast.expr:
 
 
 def translate_multi(stmt: ir.Assign, ctx: Context) -> list[Line]:
-    """``[m, i] = max(v)``: the value and its first position."""
+    """``[m, i] = max(v)``: the value and its first position (per column of a matrix)."""
     call = stmt.value
     assert isinstance(call, ir.Call)
     if call.func not in ("max", "min") or len(call.args) != 1 or len(stmt.targets) != 2:
         ctx.decline(f"{call.func} with these outputs")
     data = call.args[0]
     info = ctx.info(data)
-    if not info.is_vector:
-        ctx.decline(f"[m, i] = {call.func}(x) of a matrix or unknown shape")
+    if not (info.is_vector or info.is_matrix):
+        ctx.decline(f"[m, i] = {call.func}(x) of a value whose shape is unknown")
     value_target, position_target = stmt.targets
     expr = ctx.expr(data)
     arg_func = ("nanarg" if not info.finite else "arg") + call.func
-    position = ctx.call(ctx.np(arg_func), expr)
+    # A matrix: the row of each column's extreme, down the columns (axis=0).
+    axis = {"axis": ast.Constant(0)} if info.is_matrix else {}
+    position = ctx.call(ctx.np(arg_func), expr, **axis)
     lines: list[Line] = []
     position_name = position_target.id if isinstance(position_target, ir.Name) else None
     stored_zero_based = position_name is not None and ctx.is_index_var(position_name)
@@ -143,7 +145,7 @@ def translate_multi(stmt: ir.Assign, ctx: Context) -> list[Line]:
             lines.append(ctx.line(f"{position_name} = {ast.unparse(position)} + 1"))
     if isinstance(value_target, ir.Name):
         value: ast.expr
-        if stored_zero_based and position_name is not None:
+        if stored_zero_based and position_name is not None and not info.is_matrix:
             value = ast.Subscript(value=expr, slice=ast.Name(position_name))
         else:
             value = _reduce(call.func, data, info, None, ctx)
@@ -188,6 +190,11 @@ def _axis(node: ast.Call, rest: list[ast.expr], ctx: LiftContext) -> int | None:
     for keyword in node.keywords:
         if keyword.arg == "axis":
             axis_node = keyword.value
+        elif keyword.arg == "dtype" and isinstance(keyword.value, ast.Name):
+            # dtype=float is the .m side's own double arithmetic (and what the
+            # other direction writes for integer products); others are not.
+            if keyword.value.id != "float":
+                ctx.decline(f"dtype={keyword.value.id} in a reduction")
         else:
             ctx.decline(f"{keyword.arg}= in a reduction")
     if axis_node is None:
@@ -294,11 +301,15 @@ def lift_assign(stmt: ast.Assign, ctx: LiftContext) -> list[ir.Stmt] | None:
     func, data, rest = _name(value, ctx)
     if func not in _ARG:
         return None
-    if data is None or rest or value.keywords or not isinstance(target, ast.Name):
+    axis = _axis(value, rest, ctx) if (rest or value.keywords) else None
+    if data is None or not isinstance(target, ast.Name):
         ctx.decline(f"{func} with these arguments")
     info = ctx.info(data)
-    if not (info.is_vector or isinstance(data, ast.List)):
+    by_column = info.is_matrix and axis == 0  # np.argmax(A, axis=0): max(A) per column
+    if not (info.is_vector or isinstance(data, ast.List) or by_column):
         ctx.decline(f"{func} of a value that is not 1-D (NumPy flattens it in row order)")
+    if axis not in (None, 0) or (axis == 0 and not by_column and not info.is_vector):
+        ctx.decline(f"{func} along this axis")
     if not func.startswith("nan") and not _finite(data, ctx):
         ctx.decline(f"{func} of data that may hold NaN (NumPy stops at the first NaN)")
     loc = ctx.loc(stmt)

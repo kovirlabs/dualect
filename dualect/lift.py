@@ -45,6 +45,7 @@ from dualect.pyconstructs import PyUse, Tagger, loc_of
 from dualect.pyinfer import PyAnalysis, PyInfo, PyKind, analyze_python
 from dualect.rulebook import FROM_PYTHON, Rule, Status
 from dualect.scan import Finding
+from dualect.translators import shared_translator
 
 #: Comment directives the verify harness reads; they are never copied over,
 #: because their meaning (a 0-based position) belongs to the source pairing.
@@ -72,6 +73,11 @@ class PyRuleIndex:
     def rule_for(self, tag: str) -> Rule | None:
         """The rule covering ``tag``, or ``None``."""
         return self.by_tag.get(tag)
+
+    def call_hook(self, tag: str) -> ModuleType | None:
+        """The translator of the rule covering a call tag (for inference hooks)."""
+        rule = self.by_tag.get(tag)
+        return shared_translator(rule) if rule is not None else None
 
 
 @dataclass
@@ -121,6 +127,11 @@ class LiftContext:
         self.function: ast.FunctionDef | None = None
         self.outputs: list[str] = []
         self.loop_depth = 0
+        #: File-level verification directives the ``.m`` output needs
+        #: (``stdout`` when it prints, ``shape r`` for random values).
+        self.file_directives: list[str] = []
+        #: The statement being lifted (a rule may need its target's name).
+        self.current: ast.stmt | None = None
         self._used_comments: set[int] = set()
         self._plan(module.body)
 
@@ -165,6 +176,11 @@ class LiftContext:
     def loc(node: ast.AST) -> ir.Loc:
         """The IR location of a Python node."""
         return loc_of(node)
+
+    def file_directive(self, text: str) -> None:
+        """Ask for a ``% dualect: <text>`` line at the top of the ``.m`` output."""
+        if text not in self.file_directives:
+            self.file_directives.append(text)
 
     def assume(self, text: str) -> None:
         """Record an assumption; it is printed as ``% dualect: assumed ...``."""
@@ -359,17 +375,21 @@ class LiftContext:
         self.assumptions = []
         mark = len(self.reports)
         used = set(self._used_comments)
+        file_directives = list(self.file_directives)
+        outer_stmt, self.current = self.current, stmt
         try:
             lifted = self.translate_statement(stmt)
         except Decline as exc:
             del self.reports[mark:]
             self._used_comments = used
+            self.file_directives = file_directives
             report.status = Status.GUIDED
             report.reason = f"translator declined: {exc.reason}"
             return self.hole(stmt, report)
         except _Unsupported as exc:
             del self.reports[mark:]
             self._used_comments = used
+            self.file_directives = file_directives
             status = Status.UNSUPPORTED
             if exc.rule is not None and exc.rule.python_status is not None:
                 status = exc.rule.python_status
@@ -380,6 +400,7 @@ class LiftContext:
         finally:
             mine = self.assumptions
             self.assumptions = outer
+            self.current = outer_stmt
         notes = []
         comment = self.comments.get(getattr(stmt, "end_lineno", None) or stmt.lineno)
         if comment is None:
@@ -408,7 +429,9 @@ class LiftContext:
                 return [ir.Comment(loc=loc, text=line.strip()) for line in text.strip().split("\n")]
             case ast.Expr(value=value):
                 return [ir.ExprStmt(loc=loc, value=self.expr(value))]
-            case ast.Import() | ast.Pass():
+            case ast.Import() | ast.ImportFrom() | ast.Pass():
+                # Planning already required a mechanical rule for every module
+                # imported other than numpy (`py:import:scipy.signal`).
                 return []
         tag = _statement_tag(stmt)
         if tag is None:
@@ -675,12 +698,13 @@ def lift_python(
     :raises PythonSyntaxError: when the text is not valid Python.
     """
     module = parse_python(text=text, name=name)
-    analysis = analyze_python(module)
+    index = PyRuleIndex(rules=rules)
+    analysis = analyze_python(module, hook=index.call_hook)
     ctx = LiftContext(
         module=module,
         text=text,
         analysis=analysis,
-        index=PyRuleIndex(rules=rules),
+        index=index,
         translator_for=translator_for,
     )
     body = ctx.block(module.body)
@@ -697,11 +721,12 @@ def plan_python(*, text: str, name: str, rules: list[Rule]) -> list[Finding]:
     :raises DualectError: when the text is not valid Python.
     """
     module = parse_python(text=text, name=name)
+    index = PyRuleIndex(rules=rules)
     ctx = LiftContext(
         module=module,
         text=text,
-        analysis=analyze_python(module),
-        index=PyRuleIndex(rules=rules),
+        analysis=analyze_python(module, hook=index.call_hook),
+        index=index,
         translator_for=lambda _rule_id: None,
     )
     return ctx.findings

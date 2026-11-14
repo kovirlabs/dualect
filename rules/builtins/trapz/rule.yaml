@@ -1,0 +1,33 @@
+id: builtins/trapz
+title: "`trapz`: trapezoidal integration (`np.trapezoid`)"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:trapz]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.trapezoid
+octave: |
+  area = trapz(y);          % unit spacing
+  area = trapz(x, y);       % sample points first
+  cols = trapz(x, Y);       % down each column
+python: |
+  area = np.trapezoid(y)
+  area = np.trapezoid(y, x)  # sample points second
+  cols = np.trapezoid(Y, x, axis=0)
+why: >
+  Both integrate with the trapezoidal rule. The argument order is reversed:
+  `trapz(x, y)` but `np.trapezoid(y, x)`, so a direct transcription
+  integrates the wrong thing (x over y) without any error. A matrix is
+  integrated down its columns in `.m` code and along its last axis (the rows)
+  in NumPy, hence `axis=0`. NumPy 2.0 renamed `np.trapz` to `np.trapezoid`.
+pitfalls:
+  - >-
+    `np.trapezoid(x, y)` with the `.m` argument order silently integrates x
+    with respect to y.
+  - >-
+    `np.trapezoid(Y)` of a matrix integrates each row; `trapz(Y)` each column.
+  - >-
+    `trapz(y)` assumes unit spacing; pass the sample points for anything else.
+related: [builtins/sum-mean-max, builtins/linspace]
+python_imports: [import numpy as np]

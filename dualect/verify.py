@@ -13,6 +13,12 @@ Case files may carry directives in comments, on either side::
 
     % dualect: index idx k      -- 1-based on the .m side, 0-based in Python
     % dualect: ignore tmp       -- legitimately differs (e.g. a loop counter)
+    % dualect: shape r          -- random values: compare shape and type only
+    % dualect: stdout           -- also compare what the scripts print, exactly
+
+Printing is a result too, but most scripts print incidentally (a missing
+semicolon, a progress line), so standard output is only compared when a
+script asks for it; a translation that prints adds the directive itself.
 """
 
 import re
@@ -20,13 +26,34 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from dualect.compare import Tolerance, compare_values
+from dualect.compare import Tolerance, compare_shapes, compare_values
 from dualect.errors import DirectiveError
-from dualect.runners import MRunner, run_py_script
+from dualect.runners import MRunner, run_py_script_capturing
 
 _DIRECTIVE = re.compile(r"^\s*[%#]+\s*dualect:\s*(?P<body>.*)$")
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_KNOWN_DIRECTIVES = ("index", "ignore")
+_KNOWN_DIRECTIVES = ("index", "ignore", "shape", "stdout")
+#: Directives that take no variable names.
+_FLAG_DIRECTIVES = ("stdout",)
+#: The name standard output is reported under (not a valid identifier, so it
+#: cannot clash with a variable).
+STDOUT = "(stdout)"
+
+
+@dataclass(frozen=True)
+class Directives:
+    """The ``dualect:`` directives of one script.
+
+    :param index: names holding positions (1-based in ``.m``, 0-based in Python).
+    :param ignore: names excluded from comparison.
+    :param shape: names compared by shape and type only (random values).
+    :param stdout: whether standard output is compared.
+    """
+
+    index: frozenset[str] = frozenset()
+    ignore: frozenset[str] = frozenset()
+    shape: frozenset[str] = frozenset()
+    stdout: bool = False
 
 
 @dataclass(frozen=True)
@@ -36,11 +63,16 @@ class VerifyOptions:
     :param tolerance: allclose tolerances.
     :param index_vars: names holding indices (1-based in ``.m``, 0-based in Python).
     :param ignore: names excluded from comparison.
+    :param shape_only: names compared by shape and type only, not by value
+        (the results of ``rand``, which no two runs share).
+    :param stdout: compare the printed output too, exactly.
     """
 
     tolerance: Tolerance = field(default_factory=Tolerance)
     index_vars: frozenset[str] = frozenset()
     ignore: frozenset[str] = frozenset()
+    shape_only: frozenset[str] = frozenset()
+    stdout: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,15 +125,27 @@ class VerifyResult:
 
 
 def parse_directives(*, text: str, path: Path) -> tuple[frozenset[str], frozenset[str]]:
-    """Read ``dualect:`` comment directives from a script.
+    """Read the ``index`` and ``ignore`` directives of a script.
 
     :param text: the script source.
     :param path: used in error messages.
     :returns: ``(index_vars, ignore)``.
+    :raises DirectiveError: see :func:`read_directives`.
+    """
+    found = read_directives(text=text, path=path)
+    return found.index, found.ignore
+
+
+def read_directives(*, text: str, path: Path) -> Directives:
+    """Read every ``dualect:`` comment directive of a script.
+
+    :param text: the script source.
+    :param path: used in error messages.
     :raises DirectiveError: for an unknown directive or a malformed name, so a
         typo cannot silently weaken a comparison.
     """
     found: dict[str, set[str]] = {key: set() for key in _KNOWN_DIRECTIVES}
+    flags: set[str] = set()
     for line_number, line in enumerate(text.splitlines(), start=1):
         match = _DIRECTIVE.match(line)
         if match is None:
@@ -113,10 +157,20 @@ def parse_directives(*, text: str, path: Path) -> tuple[frozenset[str], frozense
                 f"expected one of {', '.join(_KNOWN_DIRECTIVES)}"
             )
         names = words[1:]
+        if words[0] in _FLAG_DIRECTIVES:
+            if names:
+                raise DirectiveError(f"{path}:{line_number}: {words[0]} takes no names")
+            flags.add(words[0])
+            continue
         if not names or not all(_IDENTIFIER.match(name) for name in names):
             raise DirectiveError(f"{path}:{line_number}: expected variable names after {words[0]}")
         found[words[0]].update(names)
-    return frozenset(found["index"]), frozenset(found["ignore"])
+    return Directives(
+        index=frozenset(found["index"]),
+        ignore=frozenset(found["ignore"]),
+        shape=frozenset(found["shape"]),
+        stdout="stdout" in flags,
+    )
 
 
 def options_for_pair(
@@ -131,14 +185,20 @@ def options_for_pair(
     """
     index_vars: set[str] = set(extra_index)
     ignore: set[str] = set()
+    shape: set[str] = set()
+    stdout = False
     for path in (m_path, py_path):
-        found_index, found_ignore = parse_directives(
-            text=path.read_text(encoding="utf-8"), path=path
-        )
-        index_vars |= found_index
-        ignore |= found_ignore
+        found = read_directives(text=path.read_text(encoding="utf-8"), path=path)
+        index_vars |= found.index
+        ignore |= found.ignore
+        shape |= found.shape
+        stdout = stdout or found.stdout
     return VerifyOptions(
-        tolerance=tolerance, index_vars=frozenset(index_vars), ignore=frozenset(ignore)
+        tolerance=tolerance,
+        index_vars=frozenset(index_vars),
+        ignore=frozenset(ignore),
+        shape_only=frozenset(shape),
+        stdout=stdout,
     )
 
 
@@ -165,15 +225,23 @@ def verify_pair(
 
     if runner is None:
         with MRunner() as own_runner:
-            m_outputs = own_runner.run(path=m_path)
+            m_outputs, m_printed = own_runner.run_capturing(path=m_path)
     else:
-        m_outputs = runner.run(path=m_path)
-    py_outputs = run_py_script(path=py_path)
+        m_outputs, m_printed = runner.run_capturing(path=m_path)
+    py_outputs, py_printed = run_py_script_capturing(path=py_path)
 
     results = []
+    if options.stdout:
+        results.append(_compare_printed(m_printed, py_printed))
     for name in sorted(set(m_outputs) - options.ignore):
         if name not in py_outputs:
             results.append(VarResult(name=name, ok=False, detail="missing on the Python side"))
+            continue
+        if name in options.shape_only:
+            reason = compare_shapes(m_value=m_outputs[name], py_value=py_outputs[name])
+            results.append(
+                VarResult(name=name, ok=reason is None, detail=reason or "shape and type only")
+            )
             continue
         reason = compare_values(
             m_value=m_outputs[name],
@@ -187,4 +255,23 @@ def verify_pair(
     python_only = tuple(sorted(set(py_outputs) - set(m_outputs) - options.ignore))
     return VerifyResult(
         m_path=m_path, py_path=py_path, variables=tuple(results), python_only=python_only
+    )
+
+
+def _compare_printed(m_printed: str, py_printed: str) -> VarResult:
+    """Standard output must match character for character."""
+    if m_printed == py_printed:
+        lines = m_printed.count("\n") + (not m_printed.endswith("\n") and bool(m_printed))
+        return VarResult(name=STDOUT, ok=True, detail=f"{lines} line(s), identical")
+    m_lines, py_lines = m_printed.split("\n"), py_printed.split("\n")
+    for number, (m_line, py_line) in enumerate(zip(m_lines, py_lines, strict=False), start=1):
+        if m_line != py_line:
+            return VarResult(
+                name=STDOUT, ok=False, detail=f"line {number}: {m_line!r} vs {py_line!r}"
+            )
+    return VarResult(
+        name=STDOUT,
+        ok=False,
+        detail=f"{len(m_lines)} vs {len(py_lines)} lines, ending "
+        f"{m_printed[-20:]!r} vs {py_printed[-20:]!r}",
     )

@@ -137,9 +137,13 @@ def test_holes_raise_and_say_why() -> None:
 
 def test_strict_stops_and_writes_nothing(tmp_path: Path) -> None:
     source = tmp_path / "s.m"
-    source.write_text("x = [1 2 3];\nx(end+1) = 4;\n", encoding="utf-8")
+    source.write_text(
+        "1;\nfunction [a, b] = f()\n  a = 1;\n  if nargout > 1\n    b = 2;\n  end\nend\n"
+        "[p, q] = f();\n",
+        encoding="utf-8",
+    )
     output = tmp_path / "s.py"
-    with pytest.raises(StrictModeError, match="indexing/grow-on-assign"):
+    with pytest.raises(StrictModeError, match="functions/nargout"):
         translate_file(source=source, output=output, rules=RULES, dialect=Dialect(), strict=True)
     assert not output.exists()
     assert main(["translate", str(source), "-o", str(output), "--strict"]) == EXIT_FAILED

@@ -1,0 +1,33 @@
+id: builtins/interp1
+title: "`interp1`: linear interpolation (`np.interp`)"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:interp1]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.interp
+octave: |
+  yi = interp1(x, y, xi);              % NaN outside [x(1), x(end)]
+python: |
+  yi = np.interp(xi, x, y, left=np.nan, right=np.nan)
+why: >
+  Both interpolate linearly between samples and return the shape of the query
+  points. The argument order differs (`np.interp` takes the query points
+  first), and so do the edges: outside the sample range `interp1` returns NaN
+  while `np.interp` repeats the first or last value unless `left`/`right` say
+  otherwise. `np.interp` also requires increasing sample points; `interp1`
+  sorts them.
+pitfalls:
+  - >-
+    `np.interp(xi, x, y)` clamps: a query beyond the last sample gets the last
+    value instead of NaN. Pass `left=np.nan, right=np.nan`.
+  - >-
+    Decreasing sample points give wrong values in `np.interp`, silently;
+    `interp1` accepts them. Sort first (`order = np.argsort(x)`).
+  - >-
+    `interp1(x, y, xi, 'spline')`, `'pchip'`, `'nearest'` and `'extrap'` have
+    no `np.interp` form: `scipy.interpolate` has them, and they are not
+    translated here.
+related: [builtins/polyfit-polyval, builtins/linspace]
+python_imports: [import numpy as np]

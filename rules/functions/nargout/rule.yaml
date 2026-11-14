@@ -1,0 +1,33 @@
+id: functions/nargout
+title: "`nargout`: how many outputs the caller asked for"
+status: guided
+dialects: [octave, matlab]
+match: [func:nargout]
+octave: |
+  function [lo, hi] = bounds_of(x)
+    lo = min(x);
+    if nargout > 1
+      hi = max(x);      % only computed when the caller wants it
+    end
+  end
+python: |
+  def bounds_of(x):
+      return x.min(), x.max()
+why: >
+  A `.m` function can ask how many outputs its caller requested and skip the
+  work for the others. A Python function cannot know how its result will be
+  unpacked, so it computes and returns every output; skipping work becomes a
+  flag argument. Whether always computing everything is equivalent depends on
+  what the skipped code does (it may be slow, print, or fail on some inputs),
+  so this rule stays guided: an LLM (or a person) decides, and verification
+  checks the result.
+pitfalls:
+  - >-
+    Code under `if nargout > 1` may raise for inputs the single-output calls
+    pass (`hi = max(x)` of an empty `x` is fine, `x(end)` is not); computing it
+    unconditionally changes which calls fail.
+  - >-
+    `nargout` inside a function called through a handle or with `[~, b]`
+    still counts the ignored outputs.
+related: [functions/multiple-returns, functions/nargin]
+python_imports: [import numpy as np]

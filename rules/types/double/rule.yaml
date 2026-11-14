@@ -1,0 +1,33 @@
+id: types/double
+title: "`double` and `logical`: converting between numbers and truth values"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:double, call:logical]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:method:astype
+    - py:call:float
+octave: |
+  counts = double(mask);      % true/false -> 1/0
+  flags = logical([2 0 -1]);  % nonzero -> true
+python: |
+  counts = mask.astype(float)
+  flags = np.array([2, 0, -1]).astype(bool)
+why: >
+  Every plain number in `.m` code is already a double, so `double(x)` only
+  changes logical (and char) values: a mask becomes 1s and 0s, which then add
+  up and multiply as numbers. NumPy spells the conversion `astype`; `float(x)`
+  for a single value. `logical(x)` is `x.astype(bool)`: nonzero is true.
+pitfalls:
+  - >-
+    `logical(NaN)` is an error in `.m` code, while `np.nan.astype(bool)` is
+    `True`.
+  - >-
+    `double('A')` is the character code 65; `float('A')` is an error in
+    Python. Character data is not translated.
+  - >-
+    `x.astype(int)` truncates toward zero, while `int32(x)` rounds and
+    saturates: the integer types are not translated.
+related: [operators/arithmetic, builtins/constants]
+python_imports: [import numpy as np]

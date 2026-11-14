@@ -11,8 +11,6 @@ from_python:                  # the Python -> .m direction
     - py:method:max
     - py:method:min
     - py:method:prod
-    - py:method:all
-    - py:method:any
     - py:method:argmax
     - py:method:argmin
     - py:call:np.sum
@@ -32,8 +30,6 @@ from_python:                  # the Python -> .m direction
     - py:call:np.fmin
     - py:call:np.clip
     - py:call:np.count_nonzero
-    - py:call:np.all
-    - py:call:np.any
     - py:call:max
     - py:call:min
 octave: |
@@ -66,5 +62,5 @@ pitfalls:
   - >-
     `max` and `min` skip NaN (`max([1 NaN 3])` is 3), while NumPy's propagate
     it: use `np.nanmax`/`np.nanargmax`. `sum` and `mean` propagate NaN in both.
-related: [functions/multiple-returns, indexing/colon-all, builtins/find]
+related: [functions/multiple-returns, indexing/colon-all, builtins/find, builtins/any-all]
 python_imports: [import numpy as np]

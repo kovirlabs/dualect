@@ -30,9 +30,10 @@ pitfalls:
     use float data.
   - >-
     NumPy integers wrap around silently on overflow (`np.array([2, 3])**40`,
-    `2**np.arange(70)`), where the source computes in doubles; an exponent
-    above 2 or a scalar base over an integer array is written as a float
-    (`x**40.0`, `2.0**x`). `2.^x` means `2 .^ x`, not `2. ^ x`.
+    `2**np.arange(70)`, even `np.array([3037000500])**2`), where the source
+    computes in doubles; an exponent of 2 or more, or a scalar base over an
+    integer array, is written as a float (`x**2.0`, `2.0**x`). `2.^x` means
+    `2 .^ x`, not `2. ^ x`.
   - >-
     Logical operands are numbers in the source: `m .^ 2` of a mask is 0/1
     doubles, so the mask is converted (`m.astype(int)`) first.

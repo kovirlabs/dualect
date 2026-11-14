@@ -1,0 +1,42 @@
+id: builtins/std-var
+title: "`std` and `var`: N - 1 by default"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:std, call:var]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.std
+    - py:call:np.var
+    - py:method:std
+    - py:method:var
+octave: |
+  s = std(x);          % normalised by N - 1
+  s0 = std(x, 1);      % normalised by N
+  v = var(A);          % down each column
+python: |
+  s = x.std(ddof=1)
+  s0 = x.std()
+  v = A.var(axis=0, ddof=1)
+why: >
+  The sample standard deviation and variance divide by N - 1 by default; NumPy
+  divides by N unless told `ddof=1` ("delta degrees of freedom"). The second
+  argument of `std`/`var` is a weight, not an axis: 0 (or `[]`) means N - 1,
+  1 means N. The third argument is the dimension; like `sum`, a matrix
+  reduces down its columns by default (`axis=0`).
+pitfalls:
+  - >-
+    `np.std(x)` is the population standard deviation (N); write
+    `ddof=1` to match `std(x)`.
+  - >-
+    `std(x, 2)` is not along dimension 2: the second argument is the weight.
+    `std(A, 0, 2)` is the row-wise standard deviation.
+  - >-
+    With N - 1, one element gives 0 in `.m` code but NaN (and a warning) in
+    NumPy, which divides by zero. Lengths that may be 1 are assumed out loud.
+  - >-
+    Octave 9 rewrote `std`/`var` (NaN flags, empty inputs); for finite,
+    non-empty data both old and new versions agree with NumPy. Empty inputs
+    are not translated.
+related: [builtins/sum-mean-max, builtins/median]
+python_imports: [import numpy as np]

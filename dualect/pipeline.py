@@ -32,7 +32,7 @@ from dualect.rulebook import FROM_PYTHON, TO_PYTHON, Rule, Status
 from dualect.runners import MRunner
 from dualect.scan import RuleIndex, ScanResult, scan_python_text, scan_text
 from dualect.translators import TranslatorSet
-from dualect.verify import VerifyResult, options_for_pair, parse_directives, verify_pair
+from dualect.verify import VerifyResult, options_for_pair, read_directives, verify_pair
 
 UNVERIFIED = "UNVERIFIED"
 
@@ -156,7 +156,12 @@ def translate_scan(
     ctx.enter_script()
     lines = ctx.statements(scan.program.body)
     body = render(lines)
-    imports = "".join(f"{line}\n" for line in sorted(ctx.imports))
+    # isort's order within one section: `import x` lines, then `from x import y`.
+    ordered = sorted(ctx.imports, key=lambda line: (line.startswith("from "), line))
+    imports = "".join(f"{line}\n" for line in ordered)
+    directives = "".join(f"# dualect: {text}\n" for text in ctx.file_directives)
+    if directives:
+        body = f"{directives}\n{body}"
     code = format_python(f"{imports}\n{body}" if imports else body)
     return Translation(
         source_name=scan.source_name,
@@ -202,9 +207,11 @@ def translate_python_text(
     translators = TranslatorSet(rules=rules)
     lifted = lift_python(text=text, name=name, rules=rules, translator_for=translators.get)
     scan = scan_python_text(text=text, name=name, rules=rules)
+    code = memit.program(lifted.body)
+    directives = "".join(f"% dualect: {text}\n" for text in lifted.context.file_directives)
     result = Translation(
         source_name=name,
-        code=memit.program(lifted.body),
+        code=f"{directives}{code}" if directives else code,
         statements=lifted.reports,
         scan=scan,
         rules_used=scan.needed_rules(),
@@ -250,12 +257,17 @@ def verify_translation(
         m_path, py_path = output, source
         # The source's own `index` directives describe its pairing with some
         # other .m file; the generated .m keeps Python's values, so only its
-        # own directives (and either side's `ignore`) apply.
+        # own directives (and either side's `ignore`, `shape`, `stdout`) apply.
         generated = options_for_pair(
             m_path=m_path, py_path=m_path, tolerance=tolerance_for(result.rules_used)
         )
-        _index, ignored = parse_directives(text=source.read_text(encoding="utf-8"), path=source)
-        options = dataclasses.replace(generated, ignore=generated.ignore | ignored)
+        found = read_directives(text=source.read_text(encoding="utf-8"), path=source)
+        options = dataclasses.replace(
+            generated,
+            ignore=generated.ignore | found.ignore,
+            shape_only=generated.shape_only | found.shape,
+            stdout=generated.stdout or found.stdout,
+        )
     try:
         result.verify = verify_pair(m_path=m_path, py_path=py_path, options=options, runner=runner)
     except RuntimeMissingError as exc:

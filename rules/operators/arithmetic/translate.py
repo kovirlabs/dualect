@@ -93,6 +93,10 @@ def translate(node: ir.BinOp | ir.UnOp, ctx: Context) -> ast.expr:
         if node.op == "uplus":
             return operand
         if node.op == "uminus":
+            if isinstance(node.operand, ir.Num) and node.operand.value == 0:
+                # -0 is a negative zero in the source (doubles); Python's int
+                # 0 has no sign, which shows when it is printed or divided by.
+                return ast.UnaryOp(op=ast.USub(), operand=ast.Constant(0.0))
             return ast.UnaryOp(op=ast.USub(), operand=operand)
         ctx.decline(f"unary {node.op}")
     a, b = expand(node, ctx)

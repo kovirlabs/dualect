@@ -274,7 +274,7 @@ class _Lowerer:
         self.pending_comments = []
         self.collect_continuations(node)
         stmt = self.simple_statement(node, display=display)
-        if display and not isinstance(stmt, ir.OpaqueStmt):
+        if display and not isinstance(stmt, ir.OpaqueStmt) and not _prints_nothing(stmt):
             stmt.syntax.append("syntax:display")
         stmt.syntax.extend(self.pending_syntax)
         if self.pending_comments:
@@ -732,6 +732,21 @@ class _PrattParser:
         if kind != "atom" or not isinstance(value, ir.Expr):
             raise ValueError("malformed operator chain")
         return value
+
+
+#: Functions that return nothing when called as a statement, so a missing
+#: semicolon after them displays nothing (they may print by themselves).
+_NO_RESULT_CALLS = frozenset({"disp", "printf", "fprintf", "puts", "fputs", "fdisp", "tic"})
+
+
+def _prints_nothing(stmt: ir.Stmt) -> bool:
+    """A statement whose missing ``;`` has no effect: a call that returns nothing."""
+    return (
+        isinstance(stmt, ir.ExprStmt)
+        and isinstance(stmt.value, ir.Call)
+        and not (stmt.value.local or stmt.value.handle)
+        and stmt.value.func in _NO_RESULT_CALLS
+    )
 
 
 def _reject_stray_until(body: list[ir.Stmt]) -> None:

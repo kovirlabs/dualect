@@ -1,0 +1,36 @@
+id: builtins/polyfit-polyval
+title: "`polyfit` and `polyval`: polynomial fit and evaluation"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:polyfit, call:polyval]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.polyfit
+    - py:call:np.polyval
+octave: |
+  p = polyfit(x, y, 2);       % highest power first
+  y_fit = polyval(p, x);
+python: |
+  p = np.polyfit(x, y, 2)
+  y_fit = np.polyval(p, x)
+why: >
+  `np.polyfit` and `np.polyval` are the same least-squares fit and Horner
+  evaluation, with the same argument order and the same coefficient order:
+  highest power first, so `[2 0 -1]` is 2x^2 - 1. Octave solves the
+  least-squares problem with a QR factorisation and NumPy with an SVD, so the
+  coefficients agree to rounding, not bit for bit.
+pitfalls:
+  - >-
+    The newer `np.polynomial.Polynomial` API stores coefficients lowest power
+    first (and `Polynomial.fit` rescales x): do not mix the two orders.
+  - >-
+    `[p, S] = polyfit(...)` and `[p, S, mu] = polyfit(...)` return an error
+    structure and a centring/scaling; NumPy returns covariance or residuals
+    in other forms (`cov=True`, `full=True`). Only the single output is
+    translated.
+  - >-
+    A high degree on raw x is badly conditioned in both languages; centre and
+    scale x, or use a lower degree.
+related: [builtins/interp1, operators/division]
+python_imports: [import numpy as np]

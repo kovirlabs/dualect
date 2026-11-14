@@ -1,0 +1,39 @@
+id: builtins/linear-algebra
+title: "`inv`, `det`, `trace`, `rank`"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:inv, call:det, call:trace, call:rank]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.linalg.inv
+    - py:call:np.linalg.det
+    - py:call:np.trace
+    - py:call:np.linalg.matrix_rank
+octave: |
+  B = inv(A);
+  d = det(A);
+  t = trace(A);
+  r = rank(A);
+python: |
+  B = np.linalg.inv(A)
+  d = np.linalg.det(A)
+  t = np.trace(A)
+  r = np.linalg.matrix_rank(A)
+why: >
+  These are the same LAPACK-based computations under NumPy names: `inv` is
+  `np.linalg.inv`, `det` `np.linalg.det`, `trace` `np.trace` and `rank`
+  `np.linalg.matrix_rank`, which uses the same default tolerance
+  (`max(size(A)) * eps` times the largest singular value). Solving a system
+  is still `A \ b` / `np.linalg.solve`, never `inv(A) * b`.
+pitfalls:
+  - >-
+    A singular matrix: `inv` warns and returns Inf in the source, while
+    `np.linalg.inv` raises `LinAlgError`.
+  - >-
+    `det` of a near-singular matrix is tiny but rarely exactly 0 on either
+    side; test the rank or the condition number instead.
+  - >-
+    `np.trace` of a non-square matrix sums the main diagonal; `trace` raises.
+related: [operators/division, builtins/norm]
+python_imports: [import numpy as np]
