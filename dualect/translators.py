@@ -21,6 +21,7 @@ The engine only runs the translator of a rule whose status is ``mechanical``.
 """
 
 import importlib.util
+from pathlib import Path
 from types import ModuleType
 
 from dualect.errors import RuleError
@@ -44,6 +45,21 @@ class TranslatorSet:
             rule = self._rules.get(rule_id)
             self._modules[rule_id] = load_translator(rule) if rule is not None else None
         return self._modules[rule_id]
+
+
+_SHARED: dict[Path, ModuleType | None] = {}
+
+
+def shared_translator(rule: Rule) -> ModuleType | None:
+    """A rule's translator, loaded once per process (for inference hooks).
+
+    Inference runs on every scan; reloading every rule's module each time
+    would cost more than the scan itself.
+    """
+    path = rule.path / TRANSLATOR_FILE
+    if path not in _SHARED:
+        _SHARED[path] = load_translator(rule)
+    return _SHARED[path]
 
 
 def load_translator(rule: Rule) -> ModuleType | None:

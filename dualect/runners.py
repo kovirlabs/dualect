@@ -121,8 +121,9 @@ class MRunner:
             # anything from a working directory that no longer exists.
             session.eval(f"cd({_quote_m_string(str(path.parent))});", stream_handler=ignored.append)
             # A fresh workspace per script: leftovers from an earlier script
-            # (variables or command-line functions) would otherwise leak in.
-            session.eval("clear all; close all; more off;", stream_handler=ignored.append)
+            # (variables, command-line functions, a `format long`) would
+            # otherwise leak in; `format` alone restores the default display.
+            session.eval("clear all; close all; more off; format;", stream_handler=ignored.append)
             # evalc captures the output exactly; oct2py's own stream drops
             # trailing spaces and a last line without a newline.
             source = _quote_m_string(f"source({_quote_m_string(str(path))});")

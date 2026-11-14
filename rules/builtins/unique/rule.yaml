@@ -1,0 +1,33 @@
+id: builtins/unique
+title: "`unique`: the distinct values, sorted"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:unique]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.unique
+octave: |
+  u = unique(v);          % sorted, each value once
+  w = unique(A);          % a matrix gives a column
+python: |
+  u = np.unique(v)
+  w = np.unique(A)
+why: >
+  Both return the distinct values in ascending order. The source keeps the
+  orientation of a vector and returns a column for a matrix; NumPy flattens
+  everything into a 1-D array, which stands for either. The extra outputs
+  differ in convention and are not translated.
+pitfalls:
+  - >-
+    NaN is never equal to itself, so `unique([1 NaN NaN])` keeps both NaN,
+    while `np.unique` merges them into one (`equal_nan=True` by default).
+    Data that may hold NaN is not translated.
+  - >-
+    `[u, i, j] = unique(x)` returns 1-based positions, and which occurrence
+    `i` points at (first or last) has differed between versions; NumPy's
+    `return_index` is the first, 0-based. Only the first output is translated.
+  - >-
+    `np.unique` of a 2-D array is 1-D; `unique(A)` is a column.
+related: [builtins/sort]
+python_imports: [import numpy as np]

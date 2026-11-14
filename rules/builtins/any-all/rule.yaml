@@ -1,0 +1,39 @@
+id: builtins/any-all
+title: "`any`, `all`: is any or every element nonzero?"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:any, call:all]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:method:all
+    - py:method:any
+    - py:call:np.all
+    - py:call:np.any
+octave: |
+  hit = any(v > 3);
+  ok = all(A > 0);        % one answer per column
+  rows_ok = all(A > 0, 2);
+python: |
+  hit = (v > 3).any()
+  ok = (A > 0).all(axis=0)
+  rows_ok = (A > 0).all(axis=1)
+why: >
+  Like the other reductions, `any` and `all` work down the columns of a
+  matrix and give one logical per column, while NumPy's `.any()` and `.all()`
+  without an axis reduce every element to a single value: a matrix needs
+  `axis=0`, and `any(A(:))` is `A.any()`. On empty data `any` is false and
+  `all` is true, in both.
+pitfalls:
+  - >-
+    `any(A)` of a matrix is a row of answers, one per column; `A.any()` is a
+    single value.
+  - >-
+    `any` does not count NaN as true (`any([0 NaN])` is false), while NumPy
+    does (`np.any([0, np.nan])` is True). `any` of data that may hold NaN is
+    not translated; comparisons and masks never hold NaN.
+  - >-
+    `all([])` is true and `any([])` is false: an `if all(x > 0)` on empty
+    data takes the branch.
+related: [builtins/sum-mean-max, indexing/logical]
+python_imports: [import numpy as np]

@@ -1,0 +1,38 @@
+id: builtins/flip
+title: "`fliplr`, `flipud`, `flip`: reversing the order of elements"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:fliplr, call:flipud, call:flip]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.flip
+    - py:call:np.fliplr
+    - py:call:np.flipud
+octave: |
+  r = fliplr(v);        % a row, reversed
+  B = flipud(A);        % rows in reverse order
+  c = flip(col);        % along the first non-singleton dimension
+python: |
+  r = np.flip(v)
+  B = np.flipud(A)
+  c = np.flip(col)
+why: >
+  `fliplr` reverses the columns and `flipud` the rows. A NumPy 1-D array
+  stands for both a row and a column, so the orientation of the source vector
+  decides: `fliplr` of a row reverses it, but `fliplr` of a column leaves it
+  unchanged (it has one column), and the other way round for `flipud`.
+  `flip` works along the first non-singleton dimension: it reverses any
+  vector, and the rows of a matrix (`np.flip(A, axis=0)`).
+pitfalls:
+  - >-
+    `fliplr` of a column vector and `flipud` of a row vector change nothing;
+    `np.flip` of the 1-D array that stands for it reverses it.
+  - >-
+    `np.fliplr` refuses a 1-D array, and `np.flip(A)` without an axis
+    reverses *both* axes of a matrix.
+  - >-
+    `np.flip` returns a view: writing into the result writes into the
+    original array.
+related: [builtins/sort, indexing/ranges]
+python_imports: [import numpy as np]

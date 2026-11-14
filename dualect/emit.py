@@ -150,6 +150,8 @@ class Context:
             s.name: s for s in scan.program.body if isinstance(s, ir.FunctionDef)
         }
         self.loop_stack: list[ir.Stmt] = []
+        #: The statement being translated (a rule may need its target's name).
+        self.current: ir.Stmt | None = None
         self.indent = 0
         self.reports: list[StmtReport] = []
         self.directives: set[str] = set()
@@ -392,10 +394,12 @@ class Context:
         # note must only carry what was assumed for its own header.
         outer_assumptions = self.assumptions
         self.assumptions = []
+        outer_stmt, self.current = self.current, stmt
         try:
             lines = self._translate_planned(stmt, report, saved_imports, saved_directives)
         finally:
             self.assumptions = outer_assumptions
+            self.current = outer_stmt
         if report.status is not Status.MECHANICAL:
             self.file_directives = saved_file_directives
         return lines

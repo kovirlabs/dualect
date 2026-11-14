@@ -1,0 +1,29 @@
+id: builtins/type-tests
+title: "`isnumeric`, `islogical`, `ischar`: what kind of value is this?"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:isnumeric, call:islogical, call:ischar]
+octave: |
+  if ischar(arg), ... end
+  ok = islogical(mask) && isnumeric(x);
+python: |
+  if isinstance(arg, str): ...
+  ok = np.asarray(mask).dtype == bool and np.issubdtype(np.asarray(x).dtype, np.number)
+why: >
+  The tests ask about the class of a value. In Python the same question is
+  asked of the type: a char row vector is a `str`, a logical array has
+  `dtype == bool`, and a number is any NumPy integer, float or complex dtype.
+  `np.asarray` lets one test cover Python numbers, NumPy scalars and arrays.
+pitfalls:
+  - >-
+    Logical values are not numeric: `isnumeric(true)` is false, and NumPy
+    agrees (`np.bool_` is not a subtype of `np.number`). A plain
+    `isinstance(x, (int, float))` would say `True` is numeric.
+  - >-
+    `isnumeric([])` is true and `islogical([])` false: an empty array keeps
+    its class.
+  - >-
+    `isnumeric('a')` is false: characters are not numbers, although they
+    convert to their codes in arithmetic.
+related: [types/char-strings, types/double]
+python_imports: [import numpy as np]

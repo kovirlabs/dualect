@@ -1,0 +1,12 @@
+v = [1 2 3];
+r = fliplr(v);          % 3 2 1
+same_row = flipud(v);   % a row has one row: unchanged
+c = [1; 2; 3];
+rc = flipud(c);         % 3; 2; 1
+same_col = fliplr(c);   % a column has one column: unchanged
+A = [1 2 3; 4 5 6];
+L = fliplr(A);          % columns reversed
+U = flipud(A);          % rows reversed
+F = flip(A);            % first non-singleton dimension: the rows
+G = flip(A, 2);         % along dimension 2: the columns
+w = flip(v);            % a vector, whichever way it points

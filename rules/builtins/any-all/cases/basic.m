@@ -1,0 +1,9 @@
+v = [1 5 2];
+hit = any(v > 3);
+none = all(v > 3);
+A = [1 0 2; 3 4 0];
+cols = any(A);            % one answer per column: 1 1 1
+cols_all = all(A);        % 1 0 0
+rows_all = all(A, 2);     % 0; 0
+every = all(A(:) > -1);   % every element
+nonzero = any([0 0 7]);   % numbers: nonzero counts as true

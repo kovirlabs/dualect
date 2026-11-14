@@ -1,5 +1,5 @@
 id: builtins/constants
-title: "Constants: `pi`, `Inf`, `NaN`, `eps`, `true`, `false`, `i`"
+title: "Constants: `pi`, `Inf`, `NaN`, `eps`, `true`, `false`, `i`, and arrays of them"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:pi, call:e, call:Inf, call:inf, call:NaN, call:nan, call:eps, call:true, call:false, call:i, call:j]
@@ -13,6 +13,7 @@ from_python:                  # the Python -> .m direction
     - py:call:np.finfo
     - py:attr:eps
     - py:complex
+    - py:call:np.full
 octave: |
   c = 2 * pi * r;
   m = NaN;
@@ -32,6 +33,10 @@ pitfalls:
     hides the constant, and then it is just a variable.
   - >-
     `NaN == NaN` is false in both languages; test with `isnan` / `np.isnan`.
+  - >-
+    With dimensions they build arrays, and one dimension means a square:
+    `true(3)` is 3x3 (`np.full((3, 3), True)`), `NaN(1, n)` is a row
+    (`np.full(n, np.nan)`).
   - >-
     `eps(x)` with an argument is the spacing at `x`: `np.spacing(x)`.
 related: [builtins/elementwise-math]

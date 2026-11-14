@@ -15,6 +15,12 @@ The analysis is flow-sensitive within a body, joins branches, iterates loops to
 a fixed point, and specializes each local function once, for the join of the
 argument facts at all of its call sites in the file.
 
+What a built-in returns is known here for the core ones; a rule can teach it
+about its own built-ins with ``infer_call(node, args, nargout)`` (the facts
+of the result, or ``None``) and ``infer_outputs(node, args, nargout)`` (the
+facts of each output of a multi-output call) in its ``translate.py``, so a
+new built-in needs no engine change.
+
 All facts describe the *source* (``.m``) semantics: shapes are ``rows x cols``.
 How a fact maps to NumPy (a ``1xN`` row is a 1-D array) is the emitter's
 business.
@@ -23,8 +29,10 @@ business.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from types import ModuleType
 from typing import TypedDict
 
 from dualect import ir
@@ -368,9 +376,16 @@ class Analysis:
         return self.infos.get(id(expr), UNKNOWN)
 
 
+#: Built-in name -> the translator module of the rule that covers it, if any.
+CallHook = Callable[[str], ModuleType | None]
+
+
 class _Inferrer:
-    def __init__(self, program: ir.Program) -> None:
+    def __init__(self, program: ir.Program, hook: CallHook | None = None) -> None:
         self.program = program
+        self.hook = hook
+        # id(call) of the calls whose facts came from a rule (int_dtype included).
+        self.hooked: set[int] = set()
         self.analysis = Analysis()
         self.defs: dict[str, ir.FunctionDef] = {
             s.name: s for s in program.body if isinstance(s, ir.FunctionDef)
@@ -588,6 +603,9 @@ class _Inferrer:
         first = self.expr(value, env, nargout=count)
         if isinstance(value, ir.Call):
             arg_infos = [self.analysis.info(arg) for arg in value.args]
+            hooked = self._hook(value, "infer_outputs", arg_infos, count)
+            if isinstance(hooked, list):
+                return [*hooked[:count], *[UNKNOWN] * (count - len(hooked))]
             if value.local and value.func in self.analysis.functions:
                 outputs = self.analysis.functions[value.func].outputs
                 return [outputs[k] if k < len(outputs) else UNKNOWN for k in range(count)]
@@ -862,6 +880,10 @@ class _Inferrer:
                 self.expr(lam.body, {**captured, **dict(zip(lam.params, joined, strict=True))})
                 return result
             return UNKNOWN
+        hooked = self._hook(node, "infer_call", args, nargout)
+        if isinstance(hooked, Info):
+            self.hooked.add(id(node))
+            return hooked
         if not node.args and name in CONSTANTS:
             return CONSTANTS[name]
         if name in ("nargin", "nargout"):
@@ -943,9 +965,17 @@ class _Inferrer:
             return replace(first, value=None, func=None)
         return UNKNOWN
 
+    def _hook(self, node: ir.Call, name: str, args: list[Info], nargout: int) -> object:
+        """Ask the rule covering a built-in for its facts (``None``: it does not know)."""
+        if self.hook is None or node.local or node.handle:
+            return None
+        module = self.hook(node.func)
+        function = getattr(module, name, None) if module is not None else None
+        return function(node, args, nargout) if callable(function) else None
+
     def int_result(self, node: ir.Call, result: Info) -> bool:
         """Whether the NumPy translation of a call may hold integers."""
-        if node.local or node.handle:
+        if node.local or node.handle or id(node) in self.hooked:
             return result.int_dtype
         if node.func in ("find", "size", "numel", "length", "ndims", "nargin", "nargout"):
             return True
@@ -1113,9 +1143,11 @@ def _is_end_plus(arg: ir.Expr) -> bool:
     return False
 
 
-def analyze(program: ir.Program) -> Analysis:
+def analyze(program: ir.Program, *, hook: CallHook | None = None) -> Analysis:
     """Infer facts about every expression of ``program``.
 
     :param program: lowered source.
+    :param hook: built-in name -> the module of its rule, whose
+        ``infer_call``/``infer_outputs`` describe what the built-in returns.
     """
-    return _Inferrer(program).run()
+    return _Inferrer(program, hook).run()

@@ -1,0 +1,34 @@
+id: builtins/meshgrid
+title: "`meshgrid`: coordinate grids"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:meshgrid]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.meshgrid
+octave: |
+  [X, Y] = meshgrid(x, y);    % numel(y) x numel(x)
+  Z = X.^2 + Y.^2;
+python: |
+  X, Y = np.meshgrid(x, y)
+  Z = X**2 + Y**2
+why: >
+  `meshgrid(x, y)` returns two matrices with one row per element of `y` and
+  one column per element of `x`: `X` repeats `x` along each row, `Y` repeats
+  `y` down each column. `np.meshgrid` with its default `indexing="xy"` does
+  the same, so the result is the same shape and the same values.
+pitfalls:
+  - >-
+    `np.meshgrid(x, y, indexing="ij")` (the `ndgrid` layout) returns the
+    transposes: `numel(x) x numel(y)`. Keep the default for `meshgrid`.
+  - >-
+    `meshgrid(x)` is `meshgrid(x, x)`, but `np.meshgrid(x)` returns a single
+    grid (a copy of `x`): pass the vector twice.
+  - >-
+    The grids are `numel(y) x numel(x)`, rows first: `X(i, j)` is `x(j)`.
+  - >-
+    A grid with one point along an axis is a row or column vector in the
+    source but a 2-D array in NumPy; it is not translated.
+related: [builtins/repmat, operators/arithmetic]
+python_imports: [import numpy as np]

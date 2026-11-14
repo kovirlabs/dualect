@@ -1,0 +1,42 @@
+id: builtins/num2str
+title: "`num2str`: numbers as text"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:num2str]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:str
+    - py:method:strip
+    - py:call:int
+octave: |
+  label = ['n = ', num2str(n)];        % a whole number: all digits
+  r = num2str(ratio, 4);                % 4 significant digits
+  t = num2str(x, '%8.3f');              % a format, trimmed
+python: |
+  label = "n = " + f"{n:.0f}"
+  r = f"{ratio:.4g}"
+  t = f"{x:8.3f}".strip()
+why: >
+  `num2str` chooses a format from the value itself: a whole number prints
+  all its digits, anything else prints `max(floor(log10(|x|)) + 5, 5)`
+  significant digits (so `num2str(pi)` is `3.1416` but `num2str(123.456)` is
+  `123.456`). With a precision it is `%.<prec>g`; with a format it is
+  `sprintf` with the blanks around the result removed. Python's `str` of a
+  float is its shortest round-trip repr, which is none of these.
+pitfalls:
+  - >-
+    `str(x)` of a float is not `num2str(x)`: `str(1/3)` is `0.3333333333333333`
+    but `num2str(1/3)` is `0.33333`. Give an explicit precision or format.
+  - >-
+    Whole numbers print every digit only below about 1e15; above that
+    `num2str` switches to exponent notation (`num2str(1e16)` is `1e+16`).
+  - >-
+    `num2str(x, '%8.3f')` trims the padding that `sprintf` would keep.
+  - >-
+    `num2str` of a logical prints `1`/`0`, not `True`/`False`.
+  - >-
+    `num2str(-0)` is `-0`: the sign of a negative zero is printed, which
+    `str(int(x))` would drop; `f"{x:.0f}"` keeps it.
+related: [io/printf, types/char-strings]
+python_imports: []

@@ -1,0 +1,41 @@
+id: builtins/tic-toc
+title: "`tic` / `toc`: timing"
+status: guided
+dialects: [octave, matlab]
+match: [call:tic, call:toc]
+from_python:                  # the Python -> .m direction
+  status: guided
+  match:
+    - py:import:time
+    - py:method:perf_counter
+octave: |
+  tic;
+  run_model();
+  elapsed = toc;       % seconds since tic
+python: |
+  import time
+
+  t0 = time.perf_counter()
+  run_model()
+  elapsed = time.perf_counter() - t0
+why: >
+  `tic` starts a stopwatch held by the interpreter and `toc` reads it.
+  Python has no hidden stopwatch: keep the start time in a variable
+  (`time.perf_counter()`, a monotonic clock in seconds) and subtract. Timing
+  has no numeric effect on the results, and the elapsed time differs on every
+  run, so it is never compared; that is why this rule is not mechanical: the
+  translation needs a name for the start time, and a `toc` without a
+  semicolon prints a message rather than a value. Usually the timing is
+  simply dropped from a translated script.
+pitfalls:
+  - >-
+    `toc` alone prints `Elapsed time is ... seconds.`; `t = toc` returns the
+    number and prints nothing.
+  - >-
+    `id = tic; ...; toc(id)` times one of several stopwatches: one start
+    variable each in Python.
+  - >-
+    `time.time()` is wall-clock time and can jump; use `time.perf_counter()`
+    for intervals.
+related: [io/printf]
+python_imports: [import time]

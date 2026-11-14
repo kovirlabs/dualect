@@ -1,0 +1,40 @@
+id: builtins/cumsum-cumprod
+title: "`cumsum`, `cumprod`: running sums and products"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:cumsum, call:cumprod]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.cumsum
+    - py:call:np.cumprod
+    - py:method:cumsum
+    - py:method:cumprod
+octave: |
+  c = cumsum(v);          % running total along a vector
+  C = cumsum(A);          % down each column
+  R = cumprod(A, 2);      % along each row
+python: |
+  c = np.cumsum(v)
+  C = np.cumsum(A, axis=0)
+  R = np.cumprod(A, axis=1)
+why: >
+  Both run along the first non-singleton dimension: along a vector whatever
+  its orientation, down the columns of a matrix. `np.cumsum` without an axis
+  *flattens* a 2-D array (in row order) and returns one long vector, so a
+  matrix always needs `axis=0` (dimension `d` is `axis=d - 1`). The output has
+  the input's shape.
+pitfalls:
+  - >-
+    `np.cumsum(A)` of a 2-D array is a 1-D running total over all elements in
+    row order, not the column-wise totals of `cumsum(A)`.
+  - >-
+    `cumprod` of a NumPy integer array wraps around on overflow; the source
+    multiplies doubles. Write `np.cumprod(x, dtype=float)`.
+  - >-
+    `cumsum(v, 1)` of a row vector runs along its singleton dimension and
+    returns `v` unchanged.
+  - >-
+    `cumsum([])` is empty, like `np.cumsum(np.array([]))`.
+related: [builtins/sum-mean-max, builtins/diff]
+python_imports: [import numpy as np]

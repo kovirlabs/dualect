@@ -188,6 +188,11 @@ def _axis(node: ast.Call, rest: list[ast.expr], ctx: LiftContext) -> int | None:
     for keyword in node.keywords:
         if keyword.arg == "axis":
             axis_node = keyword.value
+        elif keyword.arg == "dtype" and isinstance(keyword.value, ast.Name):
+            # dtype=float is the .m side's own double arithmetic (and what the
+            # other direction writes for integer products); others are not.
+            if keyword.value.id != "float":
+                ctx.decline(f"dtype={keyword.value.id} in a reduction")
         else:
             ctx.decline(f"{keyword.arg}= in a reduction")
     if axis_node is None:

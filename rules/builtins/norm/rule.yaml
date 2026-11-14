@@ -1,0 +1,33 @@
+id: builtins/norm
+title: "`norm`: vector and matrix norms"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:norm]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.linalg.norm
+octave: |
+  n2 = norm(v);               % Euclidean length
+  s = norm(A);                % largest singular value
+  f = norm(A, 'fro');
+python: |
+  n2 = np.linalg.norm(v)
+  s = np.linalg.norm(A, 2)
+  f = np.linalg.norm(A)
+why: >
+  For a vector both default to the Euclidean length, and `norm(v, p)` is
+  `np.linalg.norm(v, p)`. For a matrix the defaults differ: `norm(A)` is the
+  spectral norm (the largest singular value), but NumPy's default for a 2-D
+  array is the Frobenius norm, `norm(A, 'fro')`. Pass `2` to get the
+  spectral norm. The 1- and Inf-norms (largest column and row sums) agree.
+pitfalls:
+  - >-
+    `np.linalg.norm(A)` of a matrix is the Frobenius norm, not `norm(A)`;
+    write `np.linalg.norm(A, 2)`.
+  - >-
+    `norm(v, Inf)` is the largest absolute value, `np.linalg.norm(v, np.inf)`.
+  - >-
+    A matrix p-norm other than 1, 2, Inf and Frobenius has no NumPy function.
+related: [builtins/dot-cross-kron, builtins/linear-algebra]
+python_imports: [import numpy as np]

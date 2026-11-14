@@ -1,0 +1,36 @@
+id: builtins/median
+title: "`median`: middle value, down the columns of a matrix"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:median]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.median
+octave: |
+  m = median(x);
+  col_m = median(A);       % down each column
+  row_m = median(A, 2);
+python: |
+  m = np.median(x)
+  col_m = np.median(A, axis=0)
+  row_m = np.median(A, axis=1)
+why: >
+  The median is the middle value of the sorted data, the mean of the two
+  middle values for an even count, in both languages. Like `sum`, `median` of
+  a matrix works down the columns (dimension 1, `axis=0`), where
+  `np.median(A)` without an axis takes the median of all elements. NumPy
+  arrays have no `.median()` method; it is a function.
+pitfalls:
+  - >-
+    `np.median(A)` of a matrix is one number (all elements); `median(A)` is a
+    row of column medians.
+  - >-
+    An even count averages the two middle values, so the median of integers
+    may be a fraction (`median([1 2 3 4])` is 2.5).
+  - >-
+    NaN anywhere makes the result NaN in both. An empty input gave NaN in old
+    Octave versions and still does, but with warnings and version-dependent
+    shapes; it is not translated.
+related: [builtins/std-var, builtins/sum-mean-max]
+python_imports: [import numpy as np]

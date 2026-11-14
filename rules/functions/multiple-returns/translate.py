@@ -44,8 +44,15 @@ def lift_multi(stmt: ast.Assign, ctx: LiftContext) -> list[ir.Stmt]:
     assert isinstance(target, ast.Tuple | ast.List)
     if isinstance(value, ast.Attribute) and value.attr == "shape":
         return ctx.module_for("builtins/size-numel-length").lift_multi(stmt, ctx)
-    if isinstance(value, ast.Call) and ctx.tag(value) == "py:call:np.nonzero":
-        return ctx.module_for("builtins/find").lift_multi(stmt, ctx)
+    tag = ctx.tag(value) if isinstance(value, ast.Call) else None
+    rule = ctx.index.rule_for(tag) if tag is not None else None
+    if rule is not None and rule.id != "functions/multiple-returns" and tag != "py:call-local":
+        # A built-in with several results (np.nonzero, np.meshgrid, ...) is
+        # its own rule's business: that rule's lift_multi.
+        hook = getattr(ctx.module_for(rule.id), "lift_multi", None)
+        if hook is None:
+            ctx.decline(f"unpacking the result of {tag}")
+        return list(hook(stmt, ctx))
     if not (
         isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
