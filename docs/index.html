@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dualect: verified translation between .m and Python/NumPy</title>
+<meta name="description" content="dualect translates numeric code between .m files and Python/NumPy in both directions, one tested rule per construct, and verifies each translation by running both sides.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="dualect: verified translation between .m and Python/NumPy">
+<meta property="og:description" content="A tested knowledge base of translation rules and a small deterministic engine. Every translation is checked by running both languages and comparing the results.">
+<meta property="og:url" content="https://kovirlabs.github.io/dualect/">
+<meta property="og:site_name" content="dualect">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tagbrush@2/tagbrush.min.css">
+<style>
+  :root {
+    --color-primary: #0f766e;
+    --reading-width: 84ch;
+  }
+</style>
+</head>
+<body>
+<a href="#main">Skip to content</a>
+<header>
+  <nav aria-label="Site">
+    <strong>dualect</strong>
+    <ul>
+      <li><a href="https://github.com/kovirlabs/dualect">Repository</a></li>
+      <li><a href="https://github.com/kovirlabs/dualect/blob/main/docs/design.md">Design</a></li>
+      <li><a href="https://github.com/kovirlabs/dualect/tree/main/rules">Rules</a></li>
+    </ul>
+  </nav>
+  <hgroup>
+    <h1>Translate numeric code between <code>.m</code> and NumPy, and check that it still computes the same thing</h1>
+    <p>dualect is a command-line tool that translates scripts between <code>.m</code> files and Python/NumPy in both directions. It translates only what its tested rules cover, marks everything else as untranslated, and runs both versions to compare every variable.</p>
+  </hgroup>
+  <div role="group">
+    <a class="button" href="#install">Install and try it</a>
+    <a class="button outline" href="https://github.com/kovirlabs/dualect">Source on GitHub</a>
+  </div>
+</header>
+<main id="main">
+  <aside>
+    <nav aria-label="On this page">
+      <ul>
+        <li><a href="#problem">The problem</a></li>
+        <li><a href="#example">An example</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#honesty">What it will not do</a></li>
+        <li><a href="#install">Install and quick start</a></li>
+        <li><a href="#commands">Commands</a></li>
+        <li><a href="#llm">Working with an LLM</a></li>
+        <li><a href="#coverage">Current coverage</a></li>
+        <li><a href="#links">Links</a></li>
+      </ul>
+    </nav>
+  </aside>
+  <article>
+    <section id="problem" aria-labelledby="problem-title">
+      <h2 id="problem-title">The problem</h2>
+      <p>A lot of numerical code is written for Octave or MATLAB, and teams often want it in Python with NumPy, or need to move code the other way. The two languages look alike but differ in ways that change results without raising an error:</p>
+      <ul>
+        <li>Indexing starts at 1 and ranges include their end in <code>.m</code> code; NumPy starts at 0 and slices exclude their end.</li>
+        <li><code>*</code> is a matrix product in <code>.m</code> code and an element-wise product in NumPy, where the matrix product is <code>@</code>.</li>
+        <li><code>linspace</code> defaults to 100 points in <code>.m</code> code and 50 in NumPy.</li>
+        <li><code>.m</code> arrays are copied on assignment; NumPy arrays can share memory through views.</li>
+      </ul>
+      <p>Older translators are mostly unmaintained, go in one direction only, and produce Python that imitates the source language instead of plain NumPy. A general-purpose language model (LLM) often translates correctly, but nothing checks its output, and it re-derives the same rules on every request.</p>
+      <p>dualect takes a narrower approach. It keeps a <dfn>rule</dfn> for each construct or built-in function: a small folder that explains how the two languages differ and holds example pairs that are run in both. Rules that are reliable have a deterministic translator. The rest are handed to an LLM as focused context. Whichever way a translation is produced, dualect runs the source and the result and compares their outputs.</p>
+    </section>
+
+    <section id="example" aria-labelledby="example-title">
+      <h2 id="example-title">An example</h2>
+      <p>This is <a href="https://github.com/kovirlabs/dualect/blob/main/corpus/ode_rk4.m"><code>corpus/ode_rk4.m</code></a> from the repository, a fourth-order Runge-Kutta integration of a damped oscillator, followed by the Python file dualect writes for it with <code>dualect translate corpus/ode_rk4.m -o ode_rk4.py</code>. Neither listing has been edited.</p>
+      <figure>
+        <figcaption>Input: <code>ode_rk4.m</code></figcaption>
+        <pre><code>% Damped harmonic oscillator x'' + 2 zeta w0 x' + w0^2 x = 0, integrated with
+% the classic fourth-order Runge-Kutta method and compared with the exact
+% solution.
+w0 = 2*pi;          % natural frequency [rad/s]
+zeta = 0.1;         % damping ratio
+f = @(t, y) [y(2); -2*zeta*w0*y(2) - w0^2*y(1)];
+
+t_end = 3;
+h = 0.01;
+t = 0:h:t_end;
+n = numel(t);
+y = zeros(2, n);
+y(:, 1) = [1; 0];   % x(0) = 1, x'(0) = 0
+
+for k = 1:n-1
+  k1 = f(t(k), y(:, k));
+  k2 = f(t(k) + h/2, y(:, k) + h/2*k1);
+  k3 = f(t(k) + h/2, y(:, k) + h/2*k2);
+  k4 = f(t(k) + h, y(:, k) + h*k3);
+  y(:, k+1) = y(:, k) + h/6*(k1 + 2*k2 + 2*k3 + k4);
+end
+
+wd = w0*sqrt(1 - zeta^2);
+x_exact = exp(-zeta*w0*t) .* (cos(wd*t) + zeta*w0/wd*sin(wd*t));
+err = max(abs(y(1, :) - x_exact));
+energy = 0.5*y(2, :).^2 + 0.5*w0^2*y(1, :).^2;
+decay = energy(end) / energy(1);</code></pre>
+      </figure>
+      <figure>
+        <figcaption>Output: <code>ode_rk4.py</code>, as written by dualect</figcaption>
+        <pre><code># Translated from ode_rk4.m by dualect; verified against the .m source.
+import numpy as np
+
+# Damped harmonic oscillator x'' + 2 zeta w0 x' + w0^2 x = 0, integrated with
+# the classic fourth-order Runge-Kutta method and compared with the exact
+# solution.
+w0 = 2 * np.pi  # natural frequency [rad/s]
+zeta = 0.1  # damping ratio
+f = lambda t, y, zeta=zeta, w0=w0: np.array(
+    [y[1], -2 * zeta * w0 * y[1] - w0**2 * y[0]]
+)
+
+t_end = 3
+h = 0.01
+t = np.linspace(0, t_end, 301)
+n = t.size
+y = np.zeros((2, n))
+y[:, 0] = np.array([1, 0])  # x(0) = 1, x'(0) = 0
+
+# dualect: index k
+for k in range(n - 1):
+    k1 = f(t[k], y[:, k])
+    k2 = f(t[k] + h / 2, y[:, k] + h / 2 * k1)
+    k3 = f(t[k] + h / 2, y[:, k] + h / 2 * k2)
+    k4 = f(t[k] + h, y[:, k] + h * k3)
+    y[:, k + 1] = y[:, k] + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+wd = w0 * np.sqrt(1 - zeta**2)  # dualect: assumed sqrt argument in the real domain
+x_exact = np.exp(-zeta * w0 * t) * (np.cos(wd * t) + zeta * w0 / wd * np.sin(wd * t))
+err = np.nanmax(np.abs(y[0, :] - x_exact))
+energy = 0.5 * y[1, :] ** 2 + 0.5 * w0**2 * y[0, :] ** 2
+decay = energy[-1] / energy[0]</code></pre>
+      </figure>
+      <p>Points worth noticing:</p>
+      <ul>
+        <li>The first line records the verdict. dualect ran both files, and all 18 variables the <code>.m</code> script leaves behind matched within the default tolerance (the function handle <code>f</code> is only checked for being callable on both sides).</li>
+        <li><code>0:h:t_end</code> became <code>np.linspace(0, t_end, 301)</code>, because <code>np.arange</code> with a fractional step can gain or lose the end point to rounding.</li>
+        <li>Loop indices shifted to 0-based. <code># dualect: index k</code> tells the checker that <code>k</code> holds a position, so it compares it as one less than the <code>.m</code> value.</li>
+        <li><code>max</code> became <code>np.nanmax</code>, because the <code>.m</code> function ignores NaN values and <code>np.max</code> does not.</li>
+        <li>Where dualect had to assume something it could not prove, such as <code>sqrt</code> of a non-negative number, it says so in a <code># dualect: assumed …</code> comment.</li>
+      </ul>
+    </section>
+
+    <section id="how" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+
+      <h3>Rules</h3>
+      <p>Each rule is one folder, <code>rules/&lt;category&gt;/&lt;rule-id&gt;/</code>, with three parts:</p>
+      <dl>
+        <dt><code>rule.yaml</code></dt>
+        <dd>The construct in each language, <code>why</code> they differ and the known <code>pitfalls</code>, written to be read by a person learning the difference and by an LLM applying it.</dd>
+        <dt><code>translate.py</code></dt>
+        <dd>An optional deterministic translator for the construct, in one or both directions.</dd>
+        <dt><code>cases/</code></dt>
+        <dd>Pairs of <code>.m</code> and <code>.py</code> files that are run in both languages and compared in the test suite.</dd>
+      </dl>
+      <p>Keeping rules small and independent means that when a language changes, one folder changes and only its tests fail. A behavior that changed between language versions gets a new rule with its own version range rather than an edit to the old one.</p>
+
+      <h3>Status</h3>
+      <p>Every rule has a <dfn>status</dfn> for each direction of translation:</p>
+      <dl>
+        <dt><code>unsupported</code></dt>
+        <dd>The construct is documented so that it can be reported by name, but nothing translates it.</dd>
+        <dt><code>guided</code></dt>
+        <dd>No translator yet. The rule text and its cases are given to an LLM, and the LLM's output is verified like any other.</dd>
+        <dt><code>mechanical</code></dt>
+        <dd>The rule's <code>translate.py</code> translates it, and every case translates and verifies. The test suite fails if a <code>mechanical</code> rule stops qualifying, or if a <code>guided</code> rule qualifies and has not been promoted.</dd>
+      </dl>
+
+      <h3>Pipeline</h3>
+      <ol>
+        <li><strong>Parse.</strong> <code>.m</code> files are parsed with tree-sitter; Python files with the standard <code>ast</code> module. Both are lowered into one small intermediate representation, so the same rules serve both directions.</li>
+        <li><strong>Scan.</strong> Each node is tagged with the rules it needs. Anything with no rule is recorded as unsupported, with its line and column.</li>
+        <li><strong>Translate.</strong> Each statement is translated by the translators of its rules. A statement that cannot be translated with confidence is left as a marked hole.</li>
+        <li><strong>Emit.</strong> The output is assembled; Python output is formatted with ruff.</li>
+        <li><strong>Verify.</strong> Both files are run and their results compared, unless verification is turned off.</li>
+      </ol>
+
+      <h3>Verification by execution</h3>
+      <p>The <code>.m</code> side runs in GNU Octave through oct2py, in a cleared workspace; the Python side runs in a fresh namespace. Each variable the <code>.m</code> script leaves in its workspace must exist in Python with an equal value, compared with <code>numpy.allclose</code> (default <code>rtol=1e-9</code>, <code>atol=1e-12</code>, adjustable per rule) and with NaN equal to NaN. A <code>1×N</code> row equals a 1-D NumPy array, but other shape differences fail, and so does logical against numeric. Index variables marked with a <code>dualect: index</code> comment are compared as 1-based against 0-based.</p>
+      <p>Verification shows that the two programs agree on the values the script computes when it runs as written. It does not prove that they agree on every possible input.</p>
+    </section>
+
+    <section id="honesty" aria-labelledby="honesty-title">
+      <h2 id="honesty-title">What it will not do</h2>
+      <p>dualect does not guess. Its rule is that a wrong translation that looks right is worse than no translation.</p>
+      <ul>
+        <li>A statement that needs a construct with no rule, or a translator that declines because the shape or type of a value is not known, is not translated. In Python output it becomes a <code>TODO(dualect)</code> comment followed by <code>raise NotImplementedError(...)</code>; in <code>.m</code> output, a <code>% TODO(dualect)</code> comment followed by <code>error(...)</code>. The report lists each one with its line and the reason.</li>
+        <li>An output that was not verified says so on its first line, for example <code># Translated from beam_deflection.m by dualect. UNVERIFIED: 1 statement(s) not translated.</code></li>
+        <li><code>--strict</code> writes nothing at all if any statement would be left untranslated.</li>
+        <li>Python behavior with no <code>.m</code> counterpart is declined rather than imitated: writing through a NumPy view, a function that modifies its array argument, a lambda that reads a variable changed later, and <code>max</code> or <code>argmax</code> over data that may hold NaN.</li>
+        <li>Output is plain NumPy. There is no helper module that emulates the other language; a construct with no clean NumPy form stays <code>guided</code> or <code>unsupported</code>.</li>
+      </ul>
+      <p>dualect itself never calls an LLM. When an LLM fills a hole, its code is checked with <code>dualect verify</code> like everything else.</p>
+    </section>
+
+    <section id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install and quick start</h2>
+      <p>dualect needs Python 3.11 or later, <a href="https://docs.astral.sh/uv/">uv</a>, and GNU Octave for anything that runs <code>.m</code> code (<code>translate</code> with verification, <code>verify</code>, and the execution tests). It is not published on PyPI yet; run it from a clone.</p>
+      <figure>
+        <pre><code>brew install octave            # macOS; on Debian or Ubuntu: sudo apt install octave
+git clone https://github.com/kovirlabs/dualect.git
+cd dualect
+uv sync --all-groups
+uv run dualect --version</code></pre>
+        <figcaption>Installing from source.</figcaption>
+      </figure>
+
+      <h3>From <code>.m</code> to Python</h3>
+      <figure>
+        <pre><code>uv run dualect scan corpus/ode_rk4.m                    # which rules does it need?
+uv run dualect translate corpus/ode_rk4.m -o ode_rk4.py # translate, then run both and compare</code></pre>
+        <figcaption>The direction follows the file suffix of the input.</figcaption>
+      </figure>
+      <p>The last lines of the report for this file are:</p>
+      <figure>
+        <pre><code>23 statements: 23 mechanical, 0 guided, 0 unsupported
+verify corpus/ode_rk4.m &lt;-&gt; ode_rk4.py
+  ok   decay
+  …
+PASS
+verified: yes
+wrote ode_rk4.py</code></pre>
+        <figcaption>Abridged; the full report also lists every statement and every compared variable.</figcaption>
+      </figure>
+      <p>The <code>.m</code> side may use Octave syntax such as <code>#</code> comments, <code>!=</code>, <code>+=</code>, <code>do … until</code> and <code>endfunction</code>. With <code>--dialect matlab</code>, those are reported as Octave-only.</p>
+
+      <h3>From Python to <code>.m</code></h3>
+      <p>Given this <code>trapezoid.py</code>:</p>
+      <figure>
+        <pre><code>import numpy as np
+
+x = np.linspace(0, np.pi, 101)
+y = np.sin(x)
+area = 0.0
+for k in range(x.size - 1):
+    area = area + (x[k + 1] - x[k]) * (y[k] + y[k + 1]) / 2
+err = abs(area - 2)</code></pre>
+        <figcaption>Input: <code>trapezoid.py</code></figcaption>
+      </figure>
+      <p><code>uv run dualect translate trapezoid.py -o trapezoid.m</code> writes:</p>
+      <figure>
+        <pre><code>% Translated from trapezoid.py by dualect; verified against the .py source.
+x = linspace(0, pi, 101);
+y = sin(x);
+area = 0.0;
+for k = 0:numel(x) - 2
+  area = area + (x(k + 2) - x(k + 1)) * (y(k + 1) + y(k + 2)) / 2;
+end
+err = abs(area - 2);</code></pre>
+        <figcaption>Output: <code>trapezoid.m</code>. Variables keep their Python values, so <code>k</code> still counts from 0 and the indices add 1.</figcaption>
+      </figure>
+
+      <h3>Reading the report</h3>
+      <p>For each statement, <code>translate</code> prints its line and column, its kind, the status used, whether it was verified, and the rules it used. Below a statement that was not translated, it prints why (for example <code>needs call:filter (no rule)</code>). The summary line counts statements by status, and the <code>verified:</code> line gives the verdict.</p>
+      <table>
+        <caption>Exit codes of <code>dualect translate</code></caption>
+        <thead>
+          <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">0</th><td>Every statement was translated and the output verified.</td></tr>
+          <tr><th scope="row">1</th><td>Verification ran and found a difference, or <code>--strict</code> refused to write an incomplete translation.</td></tr>
+          <tr><th scope="row">4</th><td>The output was written but is not verified: it has untranslated statements, or <code>--no-verify</code> was given.</td></tr>
+        </tbody>
+      </table>
+      <p><code>dualect verify</code> exits with 0 when every variable matches and 1 otherwise. <code>dualect rules check</code> exits with 1 when a rule's status is not earned.</p>
+    </section>
+
+    <section id="commands" aria-labelledby="commands-title">
+      <h2 id="commands-title">Commands</h2>
+      <table>
+        <caption>The <code>dualect</code> command line</caption>
+        <thead>
+          <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row"><code>translate FILE -o OUT</code></th><td>Translates a <code>.m</code> file to Python or a <code>.py</code> file to <code>.m</code>, then verifies. Options: <code>--strict</code>, <code>--no-verify</code>, <code>--dialect</code> (for example <code>octave</code> or <code>matlab@R2023a</code>).</td></tr>
+          <tr><th scope="row"><code>scan FILE</code></th><td>Lists the rules a file needs, where each is used, and the constructs that have no rule. <code>--json</code> gives machine-readable output.</td></tr>
+          <tr><th scope="row"><code>context FILE</code></th><td>Prints the rules the file needs, with their cases, as Markdown for an LLM prompt.</td></tr>
+          <tr><th scope="row"><code>verify M_FILE PY_FILE</code></th><td>Runs both scripts and compares every variable. Options: <code>--rtol</code>, <code>--atol</code>, <code>--index NAME</code>, <code>--ignore NAME</code>.</td></tr>
+          <tr><th scope="row"><code>rules list</code></th><td>Lists every rule with its status in each direction and its number of cases. Filters: <code>--status</code>, <code>--direction</code>.</td></tr>
+          <tr><th scope="row"><code>rules check [RULE_ID …]</code></th><td>Runs each rule's translator on its cases in each direction and fails when a status is not earned.</td></tr>
+          <tr><th scope="row"><code>rules new CATEGORY/NAME</code></th><td>Creates a rule folder with a <code>rule.yaml</code> and one case pair to fill in.</td></tr>
+          <tr><th scope="row"><code>llms-txt -o llms.txt</code></th><td>Regenerates the one-line-per-rule index.</td></tr>
+          <tr><th scope="row"><code>mcp</code></th><td>Serves <code>scan</code>, <code>get_rule</code>, <code>translate</code> and <code>verify</code> as tools over the Model Context Protocol, on standard input and output.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="llm" aria-labelledby="llm-title">
+      <h2 id="llm-title">Working with an LLM</h2>
+      <p>The <dfn>guided path</dfn> is how statements without a deterministic translation get done. dualect supplies the knowledge and the check; the LLM you already use writes the code.</p>
+      <ol>
+        <li><code>dualect translate</code> leaves the statements it could not translate as marked holes.</li>
+        <li><code>dualect context FILE</code> prints only the rules that file needs: each rule's <code>rule.yaml</code> and one or two verified case pairs, ready to paste into a prompt.</li>
+        <li>The LLM fills the holes.</li>
+        <li><code>dualect verify</code> runs both files and compares every variable.</li>
+      </ol>
+      <p><a href="https://github.com/kovirlabs/dualect/blob/main/llms.txt"><code>llms.txt</code></a> lists every rule in one line, with its status per direction and its number of cases, so a model can find the rule it needs without reading the whole repository.</p>
+      <p>An LLM client that supports the Model Context Protocol (MCP), such as Claude Code or Claude Desktop, can call the same functions as tools. A client configuration looks like this:</p>
+      <figure>
+        <pre><code>{"mcpServers": {"dualect": {"command": "uv",
+  "args": ["run", "--directory", "/path/to/dualect", "dualect", "mcp"]}}}</code></pre>
+        <figcaption>MCP client configuration; replace <code>/path/to/dualect</code> with your clone.</figcaption>
+      </figure>
+    </section>
+
+    <section id="coverage" aria-labelledby="coverage-title">
+      <h2 id="coverage-title">Current coverage</h2>
+      <p>dualect is at version 0.1.0 and early. These numbers come from <code>dualect rules list</code> and the test suite.</p>
+      <dl>
+        <dt>Rules</dt>
+        <dd>35, with 49 case pairs between them.</dd>
+        <dt><code>.m</code> to Python</dt>
+        <dd>30 <code>mechanical</code>, 5 <code>guided</code>.</dd>
+        <dt>Python to <code>.m</code></dt>
+        <dd>29 <code>mechanical</code>, 3 <code>guided</code>; 3 rules cover constructs that exist only in <code>.m</code> code.</dd>
+      </dl>
+
+      <h3>Rules not yet mechanical</h3>
+      <table>
+        <caption>Rules that are <code>guided</code> in at least one direction</caption>
+        <thead>
+          <tr><th scope="col">Rule</th><th scope="col"><code>.m</code> to Python</th><th scope="col">Python to <code>.m</code></th><th scope="col">What is missing</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row"><code>functions/multiple-returns</code></th><td>guided</td><td>mechanical</td><td>Bodies that depend on <code>nargout</code> need to collapse into one tuple return.</td></tr>
+          <tr><th scope="row"><code>functions/nargin</code></th><td>guided</td><td>guided</td><td>Default-argument patterns need facts about arguments that the analysis does not derive.</td></tr>
+          <tr><th scope="row"><code>indexing/grow-on-assign</code></th><td>guided</td><td>guided</td><td>Growing an array past its end needs rewrites that span several statements.</td></tr>
+          <tr><th scope="row"><code>io/display</code></th><td>guided</td><td>guided</td><td><code>printf</code>-style formats and displaying values without a semicolon.</td></tr>
+          <tr><th scope="row"><code>syntax/command-syntax</code></th><td>guided</td><td>not applicable</td><td>Its case needs <code>strsplit</code>, which has no rule.</td></tr>
+        </tbody>
+      </table>
+      <p>The other 30 rules are <code>mechanical</code> in every direction they apply to. They cover comments and line continuation, array literals, character strings, one-based and logical indexing, <code>end</code> in an index, colon ranges, <code>A(:)</code>, arithmetic, division and linear solves, matrix and element-wise products and powers, transposes, comparisons, logical NOT and short-circuit logic, augmented assignment, <code>for</code>, <code>while</code>, <code>if</code> and <code>switch</code>, function definitions, constants, element-wise math, <code>zeros</code>/<code>ones</code>/<code>eye</code>, <code>linspace</code>, <code>size</code>/<code>numel</code>/<code>length</code>, <code>sum</code>/<code>mean</code>/<code>max</code>/<code>min</code>, <code>find</code> and <code>isempty</code>. The full list is in <a href="https://github.com/kovirlabs/dualect/blob/main/llms.txt"><code>llms.txt</code></a>.</p>
+
+      <h3>Example scripts</h3>
+      <p>The repository's <a href="https://github.com/kovirlabs/dualect/tree/main/corpus"><code>corpus/</code></a> holds three realistic scripts that combine many constructs, translated from <code>.m</code> to Python in the test suite.</p>
+      <table>
+        <caption>Results for the example scripts, <code>.m</code> to Python</caption>
+        <thead>
+          <tr><th scope="col">Script</th><th scope="col">Statements</th><th scope="col">Translated</th><th scope="col">Not translated</th><th scope="col">Verified</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row"><code>ode_rk4.m</code></th><td><data value="23">23</data></td><td><data value="23">23</data></td><td>0</td><td>Yes</td></tr>
+          <tr><th scope="row"><code>beam_deflection.m</code></th><td><data value="30">30</data></td><td><data value="29">29</data></td><td>1: <code>fprintf</code> is guided</td><td>No</td></tr>
+          <tr><th scope="row"><code>signal_filter.m</code></th><td><data value="33">33</data></td><td><data value="29">29</data></td><td>4: <code>filter</code> has no rule, and two <code>max</code> calls depend on its result</td><td>No</td></tr>
+        </tbody>
+      </table>
+      <p>In the other direction, the Python that dualect writes for <code>ode_rk4.m</code> translates back to <code>.m</code> completely and verifies against that Python.</p>
+
+      <h3>Not supported yet</h3>
+      <p>Any construct without a rule is reported as unsupported. Today that includes cell arrays, structs, plotting, random numbers, file input and output, and most built-in functions beyond the list above, including <code>filter</code>. Classes (<code>classdef</code>), GUIs, Simulink, MEX files and toolboxes are out of scope for now.</p>
+    </section>
+
+    <section id="links" aria-labelledby="links-title">
+      <h2 id="links-title">Links</h2>
+      <ul>
+        <li><a href="https://github.com/kovirlabs/dualect">Repository</a>: source, issues and the README.</li>
+        <li><a href="https://github.com/kovirlabs/dualect/blob/main/docs/design.md">Design document</a>: architecture, the rule format, decisions and milestones.</li>
+        <li><a href="https://github.com/kovirlabs/dualect/tree/main/rules">Rules</a>, by category: <a href="https://github.com/kovirlabs/dualect/tree/main/rules/syntax">syntax</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/indexing">indexing</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/operators">operators</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/control-flow">control flow</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/functions">functions</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/builtins">built-ins</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/types">types</a>, <a href="https://github.com/kovirlabs/dualect/tree/main/rules/io">input and output</a>.</li>
+        <li><a href="https://github.com/kovirlabs/dualect/blob/main/llms.txt"><code>llms.txt</code></a>: every rule in one line.</li>
+      </ul>
+    </section>
+  </article>
+</main>
+<footer>
+  <p>dualect is open source under the <a href="https://github.com/kovirlabs/dualect/blob/main/LICENSE">Apache License 2.0</a>.</p>
+  <p>MATLAB is a registered trademark of The MathWorks, Inc. dualect is not affiliated with or endorsed by MathWorks or the GNU Octave project.</p>
+</footer>
+</body>
+</html>
