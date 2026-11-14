@@ -10,17 +10,25 @@ turning every execution test into a silent skip.
 """
 
 import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from dualect.runners import MRunner, m_runtime_available
+from dualect.runners import EXECUTABLE_ENV, MRunner, m_runtime_available
 
 REQUIRE_ENV = "DUALECT_REQUIRE_OCTAVE"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RULES_DIR = REPO_ROOT / "rules"
 DATA_DIR = Path(__file__).resolve().parent / "data"
+
+# Prefer the headless binary. Plain ``octave`` resolves to ``octave-gui``, which
+# macOS treats as a foreground app: every test run pops up a Dock icon ("exec").
+# An explicit OCTAVE_EXECUTABLE still wins.
+_headless_octave = shutil.which("octave-cli")
+if _headless_octave:
+    os.environ.setdefault(EXECUTABLE_ENV, _headless_octave)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
