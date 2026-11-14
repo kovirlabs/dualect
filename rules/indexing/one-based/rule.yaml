@@ -1,0 +1,36 @@
+id: indexing/one-based
+title: "One-based indexing and column-major linear indices"
+status: mechanical
+dialects: [octave, matlab]
+match: [index:paren, index:colon]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:subscript
+    - py:assign-store
+octave: |
+  first = x(1);
+  a23 = A(2, 3);
+  k4 = A(4);          % linear index, column-major
+python: |
+  first = x[0]
+  a23 = A[1, 2]
+  k4 = A.ravel(order="F")[3]
+why: >
+  Octave counts from 1 and NumPy from 0, so every index drops by one. A single
+  (linear) index into a matrix walks down the columns first (column-major);
+  NumPy's default order is row-major, so use `ravel(order="F")` or
+  `np.unravel_index(k, A.shape, order="F")` to reach the same element.
+pitfalls:
+  - >-
+    Shift computed indices once, where the index value is created, not at each
+    use: a loop counter that runs 1..n becomes 0..n-1, and `x(i + 1)` stays
+    `x[i + 1]`.
+  - >-
+    `x(0)` is an error in Octave, but `x[-1]` is valid NumPy (the last element),
+    so an off-by-one in translation can fail silently.
+  - >-
+    Indices returned by functions (`find`, `max`, `sort`) are 1-based too; see
+    builtins/find and builtins/sum-mean-max.
+related: [indexing/ranges, indexing/end-in-index, builtins/find]
+python_imports: [import numpy as np]

@@ -1,0 +1,38 @@
+id: operators/not-equal
+title: "`~=` / `!=` and logical NOT `~` / `!`"
+status: mechanical
+dialects: [octave, matlab]
+match: [op:ne, op:not]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:cmp:noteq
+    - py:op:not
+    - py:op:invert
+    - py:call:np.logical_not
+octave: |
+  d = a ~= b;
+  d = a != b;         % Octave only
+  n = ~mask;
+python: |
+  d = a != b
+  n = ~mask           # mask must be a bool array
+why: >
+  `~=` (both dialects) and `!=` (Octave only) are element-wise not-equal, `!=`
+  in NumPy. Unary `~` (or `!` in Octave) is logical NOT: on a bool array it is
+  NumPy's `~`, but on numbers it must be `np.logical_not(x)` (true where x is
+  zero), because Python's `~` on integers is bitwise.
+pitfalls:
+  - >-
+    `~5` is false in Octave, but `~5` is -6 in Python: `~` means NOT only for
+    bool arrays. A scalar becomes `not x`.
+  - >-
+    `if a ~= b` with arrays is true only when every element differs; see
+    control-flow/if-elseif.
+  - >-
+    `!=` and `!x` are not valid MATLAB; `~=` and `~x` work in both dialects.
+  - >-
+    `[~, i] = max(x)` uses `~` as an ignored-output placeholder (`_` in Python),
+    unrelated to NOT.
+related: [operators/short-circuit, control-flow/if-elseif]
+python_imports: [import numpy as np]

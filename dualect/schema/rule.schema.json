@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kovirlabs/dualect/rule.schema.json",
+  "title": "dualect rule",
+  "description": "One translation rule: rules/<category>/<rule-id>/rule.yaml. See docs/design.md section 4.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "status",
+    "dialects",
+    "match",
+    "octave",
+    "python",
+    "why"
+  ],
+  "properties": {
+    "id": {
+      "description": "<category>/<rule-id>; must match the folder the file lives in.",
+      "$ref": "#/$defs/ruleId"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "status": {
+      "description": "Lifecycle stage: unsupported -> guided -> mechanical.",
+      "enum": [
+        "unsupported",
+        "guided",
+        "mechanical"
+      ]
+    },
+    "dialects": {
+      "description": "Source dialects the rule applies to.",
+      "type": "array",
+      "items": {
+        "enum": [
+          "octave",
+          "matlab"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "match": {
+      "description": "Construct tags this rule covers (vocabulary in dualect/constructs.py); the scanner maps every use of these tags to this rule.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+:[A-Za-z0-9_.-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "since": {
+      "$ref": "#/$defs/versionBound"
+    },
+    "until": {
+      "$ref": "#/$defs/versionBound"
+    },
+    "octave": {
+      "description": "The .m form, as a short snippet.",
+      "type": "string",
+      "minLength": 1
+    },
+    "python": {
+      "description": "The idiomatic NumPy form of the same snippet.",
+      "type": "string",
+      "minLength": 1
+    },
+    "why": {
+      "description": "Why the forms differ; written for a human learner and an LLM.",
+      "type": "string",
+      "minLength": 1
+    },
+    "pitfalls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ruleId"
+      },
+      "uniqueItems": true
+    },
+    "python_imports": {
+      "description": "Import lines the Python form needs, e.g. 'import numpy as np'.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "tolerance": {
+      "description": "Per-rule override of the verify tolerance (numpy.allclose rtol/atol).",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "rtol": {
+          "type": "number",
+          "minimum": 0
+        },
+        "atol": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "from_python": {
+      "description": "The Python -> .m direction: its own lifecycle stage and the Python construct tags (dualect/pyconstructs.py) this rule covers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "match"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "unsupported",
+            "guided",
+            "mechanical"
+          ]
+        },
+        "match": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^py:[a-z-]+(:[A-Za-z0-9_.-]+)?$"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ruleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$"
+    },
+    "versionBound": {
+      "description": "Per-dialect version (inclusive for since, exclusive for until), or null for unbounded.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "octave": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)*$"
+            },
+            "matlab": {
+              "type": "string",
+              "pattern": "^R[0-9]{4}[ab]$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+id: builtins/elementwise-math
+title: "Element-wise math: `abs`, `sqrt`, `exp`, `floor`, `mod`, `rem`, `isnan`, ..."
+status: mechanical
+dialects: [octave, matlab]
+match:
+  - call:abs
+  - call:sqrt
+  - call:exp
+  - call:log
+  - call:log2
+  - call:log10
+  - call:sin
+  - call:cos
+  - call:tan
+  - call:asin
+  - call:acos
+  - call:atan
+  - call:atan2
+  - call:sinh
+  - call:cosh
+  - call:tanh
+  - call:hypot
+  - call:floor
+  - call:ceil
+  - call:fix
+  - call:round
+  - call:sign
+  - call:mod
+  - call:rem
+  - call:isnan
+  - call:isinf
+  - call:isfinite
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.abs
+    - py:call:np.sqrt
+    - py:call:np.exp
+    - py:call:np.log
+    - py:call:np.log2
+    - py:call:np.log10
+    - py:call:np.sin
+    - py:call:np.cos
+    - py:call:np.tan
+    - py:call:np.arcsin
+    - py:call:np.arccos
+    - py:call:np.arctan
+    - py:call:np.arctan2
+    - py:call:np.sinh
+    - py:call:np.cosh
+    - py:call:np.tanh
+    - py:call:np.floor
+    - py:call:np.ceil
+    - py:call:np.trunc
+    - py:call:np.sign
+    - py:call:np.isnan
+    - py:call:np.isinf
+    - py:call:np.isfinite
+    - py:call:np.mod
+    - py:call:np.fmod
+    - py:call:np.hypot
+    - py:call:np.round
+    - py:call:abs
+    - py:op:mod
+octave: |
+  a = abs(x);
+  f = fix(x);         % toward zero
+  m = mod(-7, 3);     % 2
+  k = rem(-7, 3);     % -1
+python: |
+  a = np.abs(x)
+  f = np.trunc(x)
+  m = np.mod(-7, 3)
+  k = np.fmod(-7, 3)
+why: >
+  These apply to every element and keep the shape, like their `np.` namesakes.
+  Most map one to one (`exp` -> `np.exp`, `isnan` -> `np.isnan`); the
+  differences are in the names and the edge cases: `fix` is `np.trunc`, `mod`
+  takes the sign of the divisor (`np.mod`, Python's `%`), `rem` the sign of the
+  dividend (`np.fmod`). On a plain scalar, Python's built-in `abs` is enough.
+pitfalls:
+  - >-
+    `mod(x, 0)` and `rem(x, 0)` return `x`; `np.mod(x, 0)` is 0 (integers) or
+    NaN (floats). A zero divisor is not translated; an unknown one is assumed
+    nonzero, out loud.
+  - >-
+    `round` rounds halves away from zero (`round(2.5)` is 3); `np.round` and
+    Python's `round` round halves to even (2). Use
+    `np.sign(x) * np.floor(np.abs(x) + 0.5)`.
+  - >-
+    `sqrt`, `log` and `asin` of out-of-domain values return complex numbers in
+    `.m` code but NaN (with a warning) in NumPy; use `np.emath.sqrt` /
+    `np.emath.log` when negative inputs are possible.
+  - >-
+    `atan2(y, x)` keeps its argument order in `np.arctan2(y, x)`; the inverse
+    trigonometric names gain an `arc` prefix (`asin` -> `np.arcsin`).
+related: [builtins/sum-mean-max, builtins/constants]
+python_imports: [import numpy as np]

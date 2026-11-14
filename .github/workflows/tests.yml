@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Evan Gress
+#
+# Lint, format check, type check and the full pytest suite, with GNU Octave
+# installed from the Ubuntu LTS apt package (docs/design.md section 12), so
+# every rule case is executed in both languages.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: ruff + mypy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-groups
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Check formatting (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy)
+        run: uv run mypy dualect
+
+      - name: Type check the rule translators (mypy)
+        run: uv run python tools/mypy_rules.py
+
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }}, Octave from apt)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    env:
+      # Fail, rather than skip, any test that needs Octave: in CI a missing
+      # Octave is a broken setup, not a reason to pass.
+      DUALECT_REQUIRE_OCTAVE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GNU Octave (Ubuntu LTS package)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends octave
+          octave --version | head -n 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Sync dependencies
+        run: uv sync --all-groups
+
+      - name: Run pytest
+        run: uv run pytest

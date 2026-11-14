@@ -1,0 +1,33 @@
+id: operators/transpose
+title: "`'` (conjugate transpose) vs `.'` (transpose)"
+status: mechanical
+dialects: [octave, matlab]
+match: [op:ctranspose, op:transpose]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:attr:T
+    - py:method:conj
+    - py:call:np.conj
+    - py:call:np.transpose
+octave: |
+  Ah = A';            % conjugate transpose
+  At = A.';           % plain transpose
+python: |
+  Ah = A.conj().T
+  At = A.T
+why: >
+  `'` is the *conjugate* transpose and `.'` the plain transpose; they differ
+  only for complex values. NumPy's `.T` never conjugates. For data known to be
+  real, `A'` is `A.T`; for complex or unknown data use `A.conj().T`.
+pitfalls:
+  - >-
+    `.T` on a 1-D array does nothing: there is no row/column distinction to
+    flip. Use `v[:, np.newaxis]` when a 2-D column is really needed.
+  - >-
+    For a complex 1-D vector, `z'` still conjugates: `z.conj()`.
+  - >-
+    A quote right after a name, `)` or `]` is a transpose; elsewhere it starts
+    a string: `[x' y']` vs `['ab' 'cd']`.
+related: [operators/matrix-multiply, indexing/colon-all]
+python_imports: [import numpy as np]

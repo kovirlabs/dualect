@@ -1,0 +1,54 @@
+id: operators/arithmetic
+title: "`+`, `-`, comparisons and implicit expansion"
+status: mechanical
+dialects: [octave, matlab]
+match: [op:plus, op:minus, op:uminus, op:uplus, op:eq, op:lt, op:le, op:gt, op:ge]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:add
+    - py:op:sub
+    - py:op:usub
+    - py:op:uadd
+    - py:cmp:eq
+    - py:cmp:lt
+    - py:cmp:lte
+    - py:cmp:gt
+    - py:cmp:gte
+    - py:index:newaxis
+    - py:const:np.newaxis
+octave: |
+  s = a + b;
+  big = v > 1;
+  grid = c + r;       % column + row: a matrix
+python: |
+  s = a + b
+  big = v > 1
+  grid = c[:, np.newaxis] + r
+why: >
+  Addition, subtraction, negation and comparisons are element-wise in both
+  languages, and a scalar combines with every element. Both also expand
+  singleton dimensions (implicit expansion, MATLAB R2016b+ and Octave): a
+  column plus a row gives a matrix. With 1-D NumPy vectors there is no column,
+  so the column side needs an explicit axis: `c[:, np.newaxis] + r`. A matrix
+  combined with a row is the same in both; with a column it needs the axis too.
+pitfalls:
+  - >-
+    NumPy keeps `bool + bool` as bool (a logical OR) and `-mask` raises; the
+    source treats logical values as numbers, so `m + m` is
+    `m.astype(int) + m` and `t + t` of two logical scalars is `int(t) + t`.
+  - >-
+    A vector whose orientation differs between uses (a function called with a
+    row and with a column) broadcasts differently in each; such an
+    element-wise operation is declined.
+  - >-
+    Two 1-D arrays of equal length add element by element, so translating
+    `c + r` (column plus row) as `c + r` is silently wrong when the lengths
+    happen to match.
+  - >-
+    Comparisons give logical arrays (`bool` in NumPy); see indexing/logical for
+    using them as masks.
+  - >-
+    `a == b` on char arrays compares characters; see types/char-strings.
+related: [operators/matrix-multiply, syntax/array-literals, operators/division]
+python_imports: [import numpy as np]

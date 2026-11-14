@@ -1,0 +1,45 @@
+id: control-flow/switch
+title: "`switch` / `case` / `otherwise`"
+status: mechanical
+dialects: [octave, matlab]
+match: [stmt:switch]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:match
+octave: |
+  switch method
+    case 'linear'
+      k = 1;
+    case {'cubic', 'spline'}
+      k = 3;
+    otherwise
+      k = 0;
+  end
+python: |
+  match method:
+      case "linear":
+          k = 1
+      case "cubic" | "spline":
+          k = 3
+      case _:
+          k = 0
+why: >
+  `switch` compares the value with each `case` in order (strings as whole,
+  case-sensitive strings; numbers with `==`) and runs only the first match:
+  there is no fall-through and no `break`. A cell array in a `case` matches any
+  of its elements. Python's `match` with literal patterns joined by `|`
+  expresses this directly; an `if`/`elif` chain is equally correct.
+pitfalls:
+  - >-
+    A bare name in a `match` case is a capture pattern that matches anything:
+    `case limit:` does not compare with `limit`. Use literals, dotted names, or
+    a guard `case v if v == limit:`.
+  - >-
+    `otherwise` is `case _:`; without it, an unmatched value runs nothing in
+    both languages.
+  - >-
+    A numeric `case 1` also matches `1.0` in both languages (equality, not
+    type).
+related: [control-flow/if-elseif]
+python_imports: []

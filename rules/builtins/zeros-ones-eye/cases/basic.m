@@ -1,0 +1,9 @@
+Z = zeros(3);       % one argument: square
+W = ones(2, 4);
+Id = eye(3);
+R = eye(2, 3);
+z = zeros(1, 5);
+c = ones(3, 1);
+A = [1 2; 3 4];
+Zl = zeros(size(A));
+E = zeros(0, 3);

@@ -1,0 +1,37 @@
+id: types/char-strings
+title: "Char arrays `'...'` and double-quoted strings"
+status: mechanical
+dialects: [octave, matlab]
+match: [literal:string, literal:dq-string, expr:string-concat, call:strcmp]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:str
+octave: |
+  name = 'beam';
+  label = ['span of ', name];
+  same = strcmp(name, 'beam');
+python: |
+  name = "beam"
+  label = "span of " + name
+  same = name == "beam"
+why: >
+  A single-quoted literal is a char row vector; Python's `str` covers what
+  numeric code does with it. Concatenation is bracket syntax (`[a, b]`), which
+  is `a + b` for Python strings, and `strcmp` is `==`. Inside single quotes a
+  quote is doubled (`'it''s'`). Indexing a string is one-based like any array.
+pitfalls:
+  - >-
+    `a == b` on two char arrays compares character by character (and fails when
+    the lengths differ); string equality is `strcmp`, which is `==` in Python.
+  - >-
+    Double-quoted strings differ by dialect: Octave makes a char array and reads
+    backslash escapes (`"a\tb"` has a tab), MATLAB (R2016b+) makes a `string`
+    object and does not.
+  - >-
+    `numel(s)` is `len(s)`, not `s.size`.
+  - >-
+    Char arrays are numbers underneath: `'a' + 1` is 98. Python raises instead;
+    use `ord('a') + 1`.
+related: [syntax/array-literals, builtins/size-numel-length]
+python_imports: []

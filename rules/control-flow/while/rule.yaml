@@ -1,0 +1,41 @@
+id: control-flow/while
+title: "`while` loops and Octave's `do ... until`"
+status: mechanical
+dialects: [octave, matlab]
+match: [stmt:while, stmt:do-until, stmt:break, stmt:continue]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:while
+    - py:break
+    - py:continue
+octave: |
+  while err > tol
+    ...
+  end
+  do                  % Octave only
+    ...
+  until done
+python: |
+  while err > tol:
+      ...
+  while True:
+      ...
+      if done:
+          break
+why: >
+  For a scalar condition the loops are identical. An array condition is true
+  only when it is non-empty and every element is nonzero; Python raises for a
+  multi-element array, so spell it out as `x.size > 0 and x.all()`. Octave's
+  `do ... until cond` runs the body at least once: `while True:` with a final
+  `if cond: break`.
+pitfalls:
+  - >-
+    `while x` with an empty `x` is false in Octave, but `x.all()` on an empty
+    array is True in NumPy: check `x.size` too.
+  - >-
+    `k++` and `k += 1` are Octave only (MATLAB has neither); Python has `+=`.
+  - >-
+    `break` and `continue` translate directly.
+related: [control-flow/if-elseif, control-flow/for-columns]
+python_imports: [import numpy as np]

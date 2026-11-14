@@ -1,0 +1,43 @@
+id: operators/short-circuit
+title: "`&&`/`||` (short-circuit) vs `&`/`|` (element-wise)"
+status: mechanical
+dialects: [octave, matlab]
+match: [op:andand, op:oror, op:and, op:or, call:xor]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:boolop:and
+    - py:boolop:or
+    - py:op:bitand
+    - py:op:bitor
+    - py:call:np.logical_and
+    - py:call:np.logical_or
+    - py:call:np.logical_xor
+octave: |
+  if n > 0 && x(n) > 1, ... end
+  ok = a > 0 | b > 0;     % element-wise
+python: |
+  if n > 0 and x[n - 1] > 1: ...
+  ok = (a > 0) | (b > 0)
+why: >
+  `&&`/`||` work on scalars and stop as soon as the result is known: they are
+  `and`/`or`. `&`/`|` are element-wise on arrays: NumPy's `&`/`|`. In Python
+  those bind tighter than comparisons, so every comparison needs parentheses.
+pitfalls:
+  - >-
+    `a > 0 & b > 0` in Python parses as the chained comparison
+    `a > (0 & b) > 0`; always parenthesize each comparison.
+  - >-
+    `and`/`or` on NumPy arrays raise "truth value of an array is ambiguous";
+    use `&`/`|` or `np.logical_and`/`np.logical_or`.
+  - >-
+    `&`/`|` on integer (not bool) arrays are bitwise in NumPy:
+    `np.array([1, 2]) & np.array([2, 2])` is `[0, 2]`, while Octave's `&` gives
+    `[1 1]`. Use `np.logical_and` for numbers.
+  - >-
+    Inside an `if`/`while` condition, MATLAB also short-circuits `&` and `|`;
+    do not translate code that relies on that for side effects without care.
+  - >-
+    `xor(a, b)` is `np.logical_xor(a, b)`; Python's `^` is bitwise.
+related: [operators/not-equal, indexing/logical, control-flow/if-elseif]
+python_imports: [import numpy as np]

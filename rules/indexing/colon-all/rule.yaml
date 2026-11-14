@@ -1,0 +1,38 @@
+id: indexing/colon-all
+title: "`A(:)`: all elements as one column"
+status: mechanical
+dialects: [octave, matlab]
+match: [index:colon-all]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:method:ravel
+    - py:method:flatten
+    - py:method:reshape
+octave: |
+  v = A(:);           % column, column-major
+  A(:) = 0;
+python: |
+  v = A.ravel(order="F")
+  A[:] = 0
+why: >
+  `A(:)` reshapes `A` into one column by walking down the columns first.
+  NumPy's `ravel`/`flatten` default to row-major order; pass `order="F"` to
+  match. As an assignment target, `A(:) = value` fills every element and keeps
+  the shape, which is `A[:] = value`.
+pitfalls:
+  - >-
+    `A(:)` is an Nx1 column, `ravel` gives a 1-D array; reshape with
+    `.reshape(-1, 1, order="F")` only when a 2-D column is really needed.
+  - >-
+    `ravel` may return a view, so writing into it can change `A`; use
+    `flatten(order="F")` when a copy is intended.
+  - >-
+    `A(:) = 1:6` fills column by column:
+    `np.arange(1, 7).reshape(A.shape, order="F")`.
+  - >-
+    `A(:, 1)` is a different use: the colon there means all rows, `A[:, 0]`.
+  - >-
+    `sum(A(:))` is just `A.sum()`; the order does not matter for a sum.
+related: [indexing/one-based, indexing/logical]
+python_imports: [import numpy as np]

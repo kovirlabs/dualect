@@ -1,0 +1,21 @@
+id: builtins/isempty
+title: "`isempty`"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:isempty]
+octave: |
+  if isempty(x), ... end
+python: |
+  if x.size == 0: ...
+why: >
+  `isempty` is true when any dimension is zero (`[]`, `zeros(0, 3)`, `''`).
+  For a NumPy array that is `x.size == 0`; for a Python string `len(s) == 0`.
+  A Python number has no `.size`; `np.size(x) == 0` works for numbers and arrays.
+pitfalls:
+  - >-
+    Truthiness is not emptiness: `if not x:` raises for a multi-element array
+    and is True for the number 0.
+  - >-
+    `np.size("")` is 1 (a 0-d array of one string), so do not use it on strings.
+related: [builtins/size-numel-length, control-flow/if-elseif]
+python_imports: [import numpy as np]

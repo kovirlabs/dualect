@@ -1,0 +1,36 @@
+id: operators/division
+title: "`/`, `./` and `\\`: true division and linear solves"
+status: mechanical
+dialects: [octave, matlab]
+match: [op:mrdivide, op:rdivide, op:mldivide, op:ldivide]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:div
+    - py:op:floordiv
+    - py:call:np.linalg.solve
+octave: |
+  h = v / 2;          % by a scalar
+  r = 1 ./ v;         % element-wise
+  x = A \ b;          % solve A * x = b
+python: |
+  h = v / 2
+  r = 1 / v
+  x = np.linalg.solve(A, b)
+why: >
+  Division by a scalar and element-wise division (`./`) are Python's `/`, which
+  is always true division. With a matrix on the right, `/` is *matrix* right
+  division: `B / A` solves `X * A = B`, which is
+  `np.linalg.solve(A.T, B.T).T`. Left division `A \ b` solves `A * x = b`:
+  `np.linalg.solve(A, b)`. Never compute an inverse for either.
+pitfalls:
+  - >-
+    `B / A` with a matrix `A` is not element-wise; `B / A` in NumPy is.
+  - >-
+    For a non-square `A`, `A \ b` is the least-squares solution:
+    `np.linalg.lstsq(A, b, rcond=None)[0]`. `np.linalg.solve` raises for it.
+  - >-
+    `1 / 0` is `Inf` in `.m` code but raises ZeroDivisionError for Python
+    numbers (NumPy arrays give inf with a warning).
+related: [operators/matrix-multiply, operators/arithmetic]
+python_imports: [import numpy as np]

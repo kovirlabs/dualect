@@ -1,0 +1,36 @@
+id: indexing/logical
+title: "Logical (mask) indexing"
+status: mechanical
+dialects: [octave, matlab]
+match: [index:logical, index:delete]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:index:mask
+octave: |
+  big = x(x > 2);
+  x(x < 0) = 0;
+  B = A(A > 2);       % column, column-major order
+python: |
+  big = x[x > 2]
+  x[x < 0] = 0
+  B = A.T[A.T > 2]    # column-major order, as in Octave
+why: >
+  A logical mask selects the elements where it is true, in both languages. On
+  a matrix, Octave returns them as a column in column-major order; NumPy
+  returns a 1-D array in row-major order. The same elements then come out in a
+  different order unless you index the transpose (or `ravel(order="F")`).
+pitfalls:
+  - >-
+    A mask of numbers is not a logical mask: `x([1 0 1])` is an index error in
+    Octave (index 0), while NumPy's `x[np.array([1, 0, 1])]` silently picks
+    positions 1, 0, 1. Masks must be `bool` arrays.
+  - >-
+    `x(mask) = []` deletes elements: `x = x[~mask]`.
+  - >-
+    `y = x; y(m) = 0` leaves `x` alone in Octave (copy on write); in NumPy write
+    `y = x.copy()` first or `x` changes too.
+  - >-
+    Combine masks with `&`/`|` and parenthesize comparisons: `(x > 1) & (x < 3)`.
+related: [operators/short-circuit, builtins/find, indexing/colon-all]
+python_imports: [import numpy as np]

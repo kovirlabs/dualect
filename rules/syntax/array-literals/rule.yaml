@@ -1,0 +1,52 @@
+id: syntax/array-literals
+title: "Bracket literals: rows, columns, matrices, `[]` and concatenation"
+status: mechanical
+dialects: [octave, matlab]
+match: [literal:matrix, literal:empty, expr:concat]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.array
+    - py:list
+    - py:tuple
+    - py:call:np.concatenate
+    - py:call:np.vstack
+    - py:call:np.column_stack
+octave: |
+  v = [1 2 3];        % 1x3 row
+  c = [1; 2; 3];      % 3x1 column
+  A = [1 2; 3 4];
+  e = [];
+  w = [v 4];          % concatenation
+python: |
+  v = np.array([1, 2, 3])
+  c = np.array([1, 2, 3])
+  A = np.array([[1, 2], [3, 4]])
+  e = np.array([])
+  w = np.concatenate((v, [4]))
+why: >
+  Brackets build a matrix: spaces or commas separate columns, semicolons or
+  newlines separate rows, and every value is at least 2-D. Idiomatic NumPy keeps
+  vectors 1-D, so a 1xN row and an Nx1 column both become `np.array([...])` and
+  only a real matrix gets nested lists. Elements that are arrays themselves are
+  concatenated, never nested: `[v 4]` is `np.concatenate((v, [4]))` and `[a; b]`
+  of two rows is `np.vstack((a, b))`.
+pitfalls:
+  - >-
+    `[b, b]` of two columns is `np.column_stack((b, b))`, an Nx2 matrix;
+    `np.concatenate` of the 1-D vectors would give one long vector.
+  - >-
+    `[1 -2]` is two elements but `[1 - 2]` is one: inside brackets, a space
+    before a sign that is not followed by a space starts a new element.
+  - >-
+    A 1-D array has no orientation. Code that depends on row vs column
+    (broadcasting a column against a row, outer products) must say so
+    explicitly; see operators/arithmetic and operators/matrix-multiply.
+  - >-
+    A one-element literal `[x]` is just `x`.
+  - >-
+    Numbers in `.m` code are doubles, while `np.array([1, 2, 3])` holds
+    integers. That is fine for indexing and most arithmetic, but integer arrays
+    reject negative integer powers (see operators/power).
+related: [operators/arithmetic, operators/transpose, indexing/grow-on-assign]
+python_imports: [import numpy as np]

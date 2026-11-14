@@ -1,0 +1,32 @@
+id: syntax/command-syntax
+title: "Command syntax: `name arg1 arg2` vs `name('arg1', 'arg2')`"
+status: guided
+dialects: [octave, matlab]
+match: [syntax:command]
+octave: |
+  hold on          % hold('on')
+  format long      % format('long')
+  clear a b        % clear('a', 'b')
+python: |
+  # hold on: matplotlib keeps adding to the current axes by default
+  np.set_printoptions(precision=16)
+  del a, b
+why: >
+  A statement `name word1 word2` calls `name('word1', 'word2')`: every word is
+  passed as a literal string, never evaluated. Rewrite it in function form
+  first, then translate the call. Many commands (`hold`, `format`, `more`,
+  `clc`, `close all`) only change display state and have no numeric effect.
+pitfalls:
+  - >-
+    `disp x` prints the letter x, not the value of `x`.
+  - >-
+    `a -1` is `a - 1` when `a` is a variable but `a('-1')` when `a` is a
+    function: whitespace decides, so check what the name is.
+  - >-
+    Command syntax cannot return a value: `x = load data.txt` is an error; it
+    must be `x = load('data.txt')`.
+  - >-
+    `clear` alone empties the whole workspace and `clear all` also drops
+    functions; in a translated script these usually become nothing at all.
+related: [functions/definition]
+python_imports: [import numpy as np]

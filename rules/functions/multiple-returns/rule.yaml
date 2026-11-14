@@ -1,0 +1,41 @@
+id: functions/multiple-returns
+title: "Multiple return values and `nargout`"
+status: guided
+dialects: [octave, matlab]
+match: [func:multi-output, func:nargout, assign:multi, assign:ignore-output]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:assign-multi
+    - py:return-multi
+octave: |
+  function [s, p] = sum_prod(x)
+    s = sum(x);
+    p = prod(x);
+  end
+  [s, p] = sum_prod(v);
+  s_only = sum_prod(v);     % first output only
+python: |
+  def sum_prod(x):
+      return x.sum(), x.prod()
+
+  s, p = sum_prod(v)
+  s_only = sum_prod(v)[0]
+why: >
+  An Octave function names its outputs and the *caller* decides how many to
+  take; asking for one gets only the first. A Python function returns one
+  tuple: unpack it, and where Octave took fewer outputs, take the first element
+  explicitly.
+pitfalls:
+  - >-
+    `y = f(x)` in Octave is the first output; in Python `y` would be the whole
+    tuple.
+  - >-
+    `[~, i] = max(x)` discards outputs: `_, i = ...`. Built-ins differ: Python's
+    reductions return one value, see builtins/sum-mean-max.
+  - >-
+    Functions that compute optional outputs only `if nargout > 1` always
+    compute everything in a Python tuple; add a flag argument if the extra work
+    is expensive.
+related: [functions/definition, functions/nargin]
+python_imports: [import numpy as np]

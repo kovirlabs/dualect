@@ -1,0 +1,12 @@
+A = [1 2 3 4 5; 6 7 8 9 10];
+[r, c] = size(A);
+rows = size(A, 1);
+cols = size(A, 2);
+n = numel(A);
+L = length(A);      % 5: the largest dimension, not the row count
+sz = size(A);
+v = [4 5 6];
+nv = numel(v);
+e = [];
+Le = length(e);
+ne = numel(e);
