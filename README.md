@@ -1,100 +1,241 @@
 # dualect
 
-Translate numeric code between Octave/MATLAB-style `.m` files and Python/NumPy,
-in both directions, with every translation **verified by running both sides**.
+dualect translates numeric code between `.m` files (Octave/MATLAB style) and
+Python/NumPy, in both directions, and checks every translation by running both
+sides and comparing the results. It is a tested knowledge base of translation
+*rules*, one small folder per language construct or built-in function, plus a
+deterministic engine that applies the reliable ones. Statements it cannot
+translate with confidence are left as marked holes and reported, never guessed;
+an LLM can fill them using the same rules as context, and its output is checked
+the same way.
 
-> **Status: early.** Both directions work end to end: `.m` → Python with 30 of 35
-> rules mechanical, Python → `.m` with 29 mechanical, every case verified by running
-> both languages. See [docs/design.md](docs/design.md) section 11.
+Site: https://kovirlabs.github.io/dualect/ · Design: [docs/design.md](docs/design.md)
 
-## Why
+> **Status: early (0.1.0).** 35 rules. `.m` → Python: 30 mechanical, 5 guided.
+> Python → `.m`: 29 mechanical, 3 guided. Details under [Status and limits](#status-and-limits).
 
-Existing translators are mostly abandoned, go one way only, and produce Python that
-imitates MATLAB instead of idiomatic NumPy. LLMs can translate, but they re-derive
-the same tricky rules every time and nothing checks the result.
+## Example
 
-dualect is built around **rules**: one small, tested folder per language construct
-or built-in (indexing with `end`, `*` vs `.*`, `linspace`, ...). Dependable rules get
-a scripted translator; the rest are handed to an LLM as focused context; every
-result is executed and compared.
+[`corpus/ode_rk4.m`](corpus/ode_rk4.m) integrates a damped oscillator with
+Runge-Kutta. An excerpt of the input:
 
-## Usage
+```matlab
+t = 0:h:t_end;
+n = numel(t);
+y = zeros(2, n);
+y(:, 1) = [1; 0];   % x(0) = 1, x'(0) = 0
 
-```bash
-uv sync --all-groups                             # install (Python 3.11+, uv)
-uv run pytest                                    # rules, translators, corpus, both directions
-uv run ruff check . && uv run ruff format --check .
-uv run mypy dualect && uv run python tools/mypy_rules.py
+for k = 1:n-1
+  k1 = f(t(k), y(:, k));
+  ...
+err = max(abs(y(1, :) - x_exact));
 ```
 
-### `.m` → Python
+and the corresponding part of what `dualect translate corpus/ode_rk4.m -o ode_rk4.py`
+writes:
 
-```bash
-uv run dualect translate script.m -o script.py   # translate, then verify by running both
-uv run dualect scan script.m                     # which rules does it need? what has none?
-uv run dualect context script.m                  # those rules as LLM-ready prompt context
-uv run dualect verify script.m script.py         # run both sides, compare every variable
+```python
+# Translated from ode_rk4.m by dualect; verified against the .m source.
+import numpy as np
+
+...
+t = np.linspace(0, t_end, 301)
+n = t.size
+y = np.zeros((2, n))
+y[:, 0] = np.array([1, 0])  # x(0) = 1, x'(0) = 0
+
+# dualect: index k
+for k in range(n - 1):
+    k1 = f(t[k], y[:, k])
+    ...
+err = np.nanmax(np.abs(y[0, :] - x_exact))
 ```
 
-`translate` handles each statement with the rules' deterministic translators. A
-statement it cannot translate correctly is left as a `TODO(dualect)` hole that raises
-`NotImplementedError`, and is reported; `dualect context` prints the rules an LLM
-needs to fill it, and `--strict` refuses to write anything incomplete. The first line
-of the output says whether it was verified against the `.m` source. Where a shape had
-to be assumed the line says so (`# dualect: assumed ...`), and `# dualect: index k`
-marks a variable stored 0-based because it only ever holds positions.
+The first line is the verdict: both files were run and all 18 variables matched.
+`max` became `np.nanmax` because the `.m` `max` skips NaN; `# dualect: index k`
+tells the checker that `k` holds a position and is 0-based on the Python side.
+
+## Install
+
+dualect needs Python 3.11+, [uv](https://docs.astral.sh/uv/), and GNU Octave for
+anything that runs `.m` code (`translate` with verification, `verify`, and the
+execution tests). It is not on PyPI yet.
+
+```bash
+brew install octave        # or: sudo apt install octave
+git clone https://github.com/kovirlabs/dualect.git && cd dualect
+uv sync --all-groups
+uv run dualect --version
+```
+
+## Quick start
+
+The direction follows the input file's suffix.
+
+**`.m` → Python**
+
+```bash
+uv run dualect scan corpus/ode_rk4.m                     # rules it needs; constructs with none
+uv run dualect translate corpus/ode_rk4.m -o ode_rk4.py  # translate, then run both and compare
+```
+
+**Python → `.m`.** Given `trapezoid.py`:
+
+```python
+import numpy as np
+
+x = np.linspace(0, np.pi, 101)
+y = np.sin(x)
+area = 0.0
+for k in range(x.size - 1):
+    area = area + (x[k + 1] - x[k]) * (y[k] + y[k + 1]) / 2
+err = abs(area - 2)
+```
+
+`uv run dualect translate trapezoid.py -o trapezoid.m` writes:
+
+```matlab
+% Translated from trapezoid.py by dualect; verified against the .py source.
+x = linspace(0, pi, 101);
+y = sin(x);
+area = 0.0;
+for k = 0:numel(x) - 2
+  area = area + (x(k + 2) - x(k + 1)) * (y(k + 1) + y(k + 2)) / 2;
+end
+err = abs(area - 2);
+```
+
+Variables keep their Python values (`k` still counts from 0), so indices add 1.
+Python behaviour with no `.m` counterpart is declined rather than imitated:
+writing through a NumPy view, a function that modifies its array argument, a
+lambda that reads a variable changed later, `max`/`argmax` over data that may
+hold NaN, and similar ([design section 5.5](docs/design.md)).
 
 The `.m` side may use Octave syntax (`#` comments, `!=`, `++`, `+=`,
 `do ... until`, `endfunction`); `--dialect matlab` reports it as Octave-only.
 
-### Python → `.m`
+## Reading the report
+
+`translate` prints one line per statement: line and column, kind, the status
+used, whether it was verified, and the rules it used. Under a statement it could
+not translate, it prints why, for example `needs call:filter (no rule)` or
+`translator declined: max of a value whose shape is unknown or along a singleton dimension`. Then come a
+summary (`30 statements: 29 mechanical, 1 guided, 0 unsupported`), the
+per-variable comparison when verification ran, and a `verified:` line.
+
+An untranslated statement becomes a hole in the output: in Python, a
+`# TODO(dualect)` comment quoting the source line followed by
+`raise NotImplementedError(...)`; in `.m`, a `% TODO(dualect)` comment followed
+by `error(...)`. The output's first line then says `UNVERIFIED` and why.
+`# dualect: assumed ...` marks an assumption the engine could not prove (for
+example a real `sqrt` argument).
+
+| Exit code | `translate` | `verify` |
+|---|---|---|
+| 0 | complete and verified | every variable matches |
+| 1 | verification found a difference, or `--strict` refused to write | a variable differs or is missing |
+| 4 | written but unverified: holes remain, or `--no-verify` was given | — |
+
+`--strict` writes nothing if any statement would be left as a hole.
+
+## Commands
 
 ```bash
-uv run dualect translate model.py -o model.m     # the direction follows the suffix
-uv run dualect scan model.py                     # rules needed, Python constructs with none
-uv run dualect context model.py
-```
-
-The same rules translate back: a 1-D NumPy array becomes a `1xN` row, `A @ v`
-becomes `(A * v.').'`, `x[i]` becomes `x(i + 1)` (variables keep their Python
-values), and the output is checked by running the `.py` and the `.m`. Holes are
-`% TODO(dualect)` comments followed by `error(...)`. Python behaviour with no `.m`
-counterpart is declined, not imitated: writing through a NumPy view or alias, a
-function writing into its array argument, a lambda that reads a variable changed
-later, `max` of data that may hold NaN, and the like (design section 5.5).
-
-### Rules
-
-```bash
+uv run dualect translate FILE -o OUT [--strict] [--no-verify] [--dialect octave|matlab@R2023a]
+uv run dualect scan FILE [--json]       # rules a file needs, and constructs with none
+uv run dualect context FILE             # those rules and their cases, as LLM prompt context
+uv run dualect verify FILE.m FILE.py    # run both, compare every variable
+                                        #   [--rtol] [--atol] [--index NAME] [--ignore NAME]
 uv run dualect rules list [--status guided] [--direction from-python]
-uv run dualect rules check [RULE_ID ...]         # does each rule earn its status, both ways?
-uv run dualect rules new indexing/foo            # scaffold a rule folder
-uv run dualect llms-txt -o llms.txt              # regenerate the one-line-per-rule index
+uv run dualect rules check [RULE_ID ...] # does each rule earn its status, both ways?
+uv run dualect rules new CATEGORY/NAME  # scaffold a rule folder
+uv run dualect llms-txt -o llms.txt     # regenerate the one-line-per-rule index
+uv run dualect mcp                      # MCP server on stdio
 ```
 
-`rules check` runs every rule's translator on its cases in each direction, compares
-the result with the hand-written target and runs both sides; it fails when a rule
-marked `mechanical` does not qualify, or a `guided` one does (promote it).
-[`llms.txt`](llms.txt) lists every rule in one line for an LLM.
+## Rules
 
-### MCP server
+Each rule is a folder `rules/<category>/<rule-id>/`:
 
-```bash
-uv run dualect mcp                               # stdio; tools: scan, get_rule, translate, verify
-```
+- `rule.yaml`: the construct in each language, `why` they differ and the
+  `pitfalls`, written for a person learning the difference and for an LLM
+  applying it; the construct tags it `match`es; its status per direction.
+- `translate.py` (optional): the deterministic translator, for one or both directions.
+- `cases/*.m` + `*.py`: paired examples, run in both languages and compared.
 
-A client configuration (Claude Code, Claude Desktop, ...) looks like:
+A rule's status, per direction, is `unsupported` (documented so it can be
+reported by name), `guided` (an LLM applies it; the result is verified) or
+`mechanical` (its `translate.py` translates every case, and each verifies).
+`rules check` fails when a `mechanical` rule no longer qualifies, or when a
+`guided` one qualifies and should be promoted. A behaviour that changed between
+language versions gets a new rule with `since`/`until`, not an edit to the old one.
+
+To add a rule:
+
+1. `uv run dualect rules new indexing/my-rule`, then fill in `rule.yaml` and
+   `cases/basic.m` + `cases/basic.py`, removing every `TODO`.
+2. `uv run pytest tests/test_rules.py` runs the cases in both languages.
+3. Optionally write `translate.py` (see existing rules such as
+   [`rules/builtins/linspace`](rules/builtins/linspace)) and set the status to
+   `mechanical` once `uv run dualect rules check indexing/my-rule` passes.
+4. `uv run dualect llms-txt -o llms.txt` (a test fails when it is stale).
+
+The rule format and the pipeline are specified in [docs/design.md](docs/design.md)
+sections 4 and 5.
+
+## Using it with an LLM
+
+dualect never calls an LLM API itself; it supplies the knowledge and the check.
+`dualect context FILE` prints only the rules that file needs, with verified case
+pairs; the LLM fills the holes; `dualect verify` checks the result.
+[`llms.txt`](llms.txt) lists every rule in one line.
+
+`dualect mcp` serves the tools `scan`, `get_rule`, `translate` and `verify` over
+the Model Context Protocol (stdio). A client configuration (Claude Code, Claude
+Desktop, ...) looks like:
 
 ```json
 {"mcpServers": {"dualect": {"command": "uv",
   "args": ["run", "--directory", "/path/to/dualect", "dualect", "mcp"]}}}
 ```
 
-The server gives the client's model the rules and the checks; dualect itself never
-calls an LLM API, and anything the model writes can be checked with `verify`.
+## Status and limits
 
-`translate`, `verify` and the execution tests need GNU Octave (`brew install octave`,
-`apt install octave`).
+From `uv run dualect rules list`: 35 rules with 49 case pairs.
+
+- `.m` → Python: 30 mechanical; guided: `functions/multiple-returns`,
+  `functions/nargin`, `indexing/grow-on-assign`, `io/display`,
+  `syntax/command-syntax`.
+- Python → `.m`: 29 mechanical; guided: `functions/nargin`,
+  `indexing/grow-on-assign`, `io/display`; 3 rules cover `.m`-only constructs.
+
+The [`corpus/`](corpus) scripts, `.m` → Python:
+
+| Script | Statements | Translated | Verified |
+|---|---|---|---|
+| `ode_rk4.m` | 23 | 23 | yes |
+| `beam_deflection.m` | 30 | 29 (`fprintf` is guided) | no |
+| `signal_filter.m` | 33 | 29 (`filter` has no rule; two `max` calls depend on it) | no |
+
+The Python that dualect writes for `ode_rk4.m` translates back to `.m` and verifies.
+
+Not supported yet: cell arrays, structs, plotting, random numbers, file I/O and
+most built-ins beyond the rules listed in `llms.txt`. Out of scope for now:
+`classdef`, GUIs, Simulink, MEX and toolboxes. Verification shows the two
+programs agree when run as written, not on every possible input.
+
+## Development
+
+```bash
+uv sync --all-groups
+uv run pytest                            # Octave tests skip if Octave is absent
+uv run ruff check . && uv run ruff format --check .
+uv run mypy dualect && uv run python tools/mypy_rules.py
+```
+
+CI installs Octave and sets `DUALECT_REQUIRE_OCTAVE=1`, so Octave tests fail
+there instead of skipping. The project site is the single page
+[`docs/index.html`](docs/index.html), served by GitHub Pages from `/docs`.
 
 ## License
 
