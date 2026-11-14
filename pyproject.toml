@@ -99,6 +99,8 @@ select = [
 # lambda for a function handle (E731) or enumerate() for a counter (SIM113)
 # would hide the correspondence.
 "rules/**/cases/*.py" = ["F841", "B007", "E731", "SIM108", "SIM113"]
+# Adversarial probes are source snippets kept on one line each, as data.
+"tests/test_adversarial*.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["dualect"]

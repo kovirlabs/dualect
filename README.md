@@ -11,8 +11,8 @@ the same way.
 
 Site: https://kovirlabs.github.io/dualect/ · Design: [docs/design.md](docs/design.md)
 
-> **Status: early (0.1.0).** 35 rules. `.m` → Python: 30 mechanical, 5 guided.
-> Python → `.m`: 29 mechanical, 3 guided. Details under [Status and limits](#status-and-limits).
+> **Status: early (0.1.0).** 61 rules. `.m` → Python: 58 mechanical, 3 guided.
+> Python → `.m`: 54 mechanical, 1 guided. Details under [Status and limits](#status-and-limits).
 
 ## Example
 
@@ -118,7 +118,7 @@ The `.m` side may use Octave syntax (`#` comments, `!=`, `++`, `+=`,
 
 `translate` prints one line per statement: line and column, kind, the status
 used, whether it was verified, and the rules it used. Under a statement it could
-not translate, it prints why, for example `needs call:filter (no rule)` or
+not translate, it prints why, for example `needs call:cond (no rule)` or
 `translator declined: max of a value whose shape is unknown or along a singleton dimension`. Then come a
 summary (`30 statements: 29 mechanical, 1 guided, 0 unsupported`), the
 per-variable comparison when verification ran, and a `verified:` line.
@@ -128,7 +128,9 @@ An untranslated statement becomes a hole in the output: in Python, a
 `raise NotImplementedError(...)`; in `.m`, a `% TODO(dualect)` comment followed
 by `error(...)`. The output's first line then says `UNVERIFIED` and why.
 `# dualect: assumed ...` marks an assumption the engine could not prove (for
-example a real `sqrt` argument).
+example a real `sqrt` argument). A translation that prints carries
+`# dualect: stdout`, so verification also compares the printed text exactly;
+`# dualect: shape r` compares random values by shape only.
 
 | Exit code | `translate` | `verify` |
 |---|---|---|
@@ -201,26 +203,40 @@ Desktop, ...) looks like:
 
 ## Status and limits
 
-From `uv run dualect rules list`: 35 rules with 49 case pairs.
+From `uv run dualect rules list`: 61 rules with 88 case pairs.
 
-- `.m` → Python: 30 mechanical; guided: `functions/multiple-returns`,
-  `functions/nargin`, `indexing/grow-on-assign`, `io/display`,
-  `syntax/command-syntax`.
-- Python → `.m`: 29 mechanical; guided: `functions/nargin`,
-  `indexing/grow-on-assign`, `io/display`; 3 rules cover `.m`-only constructs.
+- `.m` → Python: 58 mechanical; guided: `functions/nargout` (a body that
+  depends on how many outputs were requested), `io/display` (a missing `;`:
+  the display format depends on the value) and `builtins/tic-toc` (timing).
+- Python → `.m`: 54 mechanical; guided: `builtins/tic-toc`; 6 rules cover
+  `.m`-only constructs.
 
-The [`corpus/`](corpus) scripts, `.m` → Python:
+Built-ins with rules include printing (`printf`, `fprintf`, `sprintf`, `disp`,
+`num2str`), `filter` (as `scipy.signal.lfilter`), reductions and statistics
+(`sum mean max min prod cumsum cumprod diff any all std var median`), ordering
+(`sort` with its index output, `unique`, `flip`), shape (`reshape repmat cat
+horzcat vertcat meshgrid`), linear algebra (`norm dot cross kron inv det trace
+rank`, `\` for square and tall systems), `interp1`, `polyfit`, `polyval`,
+`trapz`, `rand`/`randn` (compared by shape only: no two runs share values) and
+the element-wise math functions; `llms.txt` lists them all.
+[NumPy for MATLAB users](https://numpy.org/doc/stable/user/numpy-for-matlab-users.html)
+served as the checklist. Forms a rule cannot translate exactly are declined
+by name (for example `%d` of a fraction, `unique` with several outputs,
+`interp1` with `'spline'`).
 
-| Script | Statements | Translated | Verified |
+The [`corpus/`](corpus) scripts:
+
+| Script | `.m` → Python | Verified | Back to `.m` |
 |---|---|---|---|
-| `ode_rk4.m` | 23 | 23 | yes |
-| `beam_deflection.m` | 30 | 29 (`fprintf` is guided) | no |
-| `signal_filter.m` | 33 | 29 (`filter` has no rule; two `max` calls depend on it) | no |
+| `ode_rk4.m` | 23/23 | yes | 21/21, verified |
+| `beam_deflection.m` | 30/30 | yes | 27/27, verified |
+| `signal_filter.m` | 33/33 | yes | 29/29, verified |
+| `least_squares_fit.m` | 26/27 (`cond` has no rule) | no | holes carried over |
+| `data_statistics.m` | 27/28 (`round` of an expression is declined) | no | holes carried over |
+| `grid_heat.m` | 20/26 (`trapz` along a dimension, `ind2sub`, shapes lost after a slice) | no | holes carried over |
 
-The Python that dualect writes for `ode_rk4.m` translates back to `.m` and verifies.
-
-Not supported yet: cell arrays, structs, plotting, random numbers, file I/O and
-most built-ins beyond the rules listed in `llms.txt`. Out of scope for now:
+Not supported yet: cell arrays, structs, plotting, file I/O and built-ins
+beyond the rules listed in `llms.txt`. Out of scope for now:
 `classdef`, GUIs, Simulink, MEX and toolboxes. Verification shows the two
 programs agree when run as written, not on every possible input.
 

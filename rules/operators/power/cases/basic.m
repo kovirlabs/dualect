@@ -7,3 +7,6 @@ h = 2 ^ -1;
 x = [1 2 3];
 y = 2 .^ x;
 r = x .^ -1;
+big = [3037000500 2];
+sq = big .^ 2;      % beyond 2^63: doubles in the source, no wrap-around
+e2 = big(1) ^ 2;    % an element of an integer array is a NumPy integer

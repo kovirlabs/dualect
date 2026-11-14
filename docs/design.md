@@ -1,6 +1,6 @@
 # dualect — design
 
-Status: 2026-11-13. This document is the plan; section 11 tracks what is built.
+Status: 2026-11-14. This document is the plan; section 11 tracks what is built.
 
 ## 1. Problem
 
@@ -266,7 +266,21 @@ join of the argument facts at its call sites in the file.
   (the source leaves the variable as a `1x0` array). The normalizer turns
   `2.^x` into `2 .^x`: the grammar read it as the number `2.` and a matrix
   power. Horizontal concatenation of columns and matrices is
-  `np.column_stack`.
+  `np.column_stack`. Squares overflow too (an int64 holding 3037000500 has a
+  square beyond 2**63), so every exponent of 2 or more on an integer array,
+  or on an element read out of one (`np.int64`), is a float (`x**2.0`), and
+  an integer matrix power works in floats (`A.astype(float)`).
+- **Built-ins teach the analysis themselves.** A rule's `translate.py` may
+  define `infer_call(node, args, nargout)` and `infer_outputs(...)` (what a
+  built-in returns, as `Info`), and `pyinfer_call(tag, node, args, keywords,
+  receiver)` for the Python direction; `dualect/infer.py` and
+  `dualect/pyinfer.py` ask the rule covering a call before their own tables.
+  So a new built-in is still one folder, facts included. A call made only for
+  its effect (`fprintf(...)`) may need several statements (a loop that
+  recycles a format): its rule's `translate_call_statement` provides them.
+  A store the scanner tagged `assign:grow` goes to indexing/grow-on-assign's
+  `translate_store`, and `a, b = <built-in>(...)` from Python to the claiming
+  rule's `lift_multi`.
 - **Output.** ruff formats the file (its default style, so the result does not
   depend on the caller's configuration). The first line states the verdict:
   `verified against the .m source`, or `UNVERIFIED: <reason>` (holes, no
@@ -472,6 +486,23 @@ good seed for `builtins/*` rules (link, don't copy).
    folder that was deleted afterwards left Octave in a missing working
    directory, failing every later script; the runner now changes directory
    before clearing the workspace.
+
+7. **Coverage** (done): 61 rules, 88 case pairs. `.m` -> Python 58
+   mechanical, 3 guided (`functions/nargout`, split out of
+   multiple-returns; `io/display`, now only a missing `;`; `builtins/tic-toc`);
+   Python -> `.m` 54 mechanical, 1 guided, 6 `.m`-only. New: `io/printf`
+   (formats as f-strings, recycling carried out statically or as a loop),
+   `builtins/filter` (`scipy.signal.lfilter`, SciPy added as a dependency),
+   `types/double`, 22 built-in rules chosen from NumPy's "NumPy for MATLAB
+   users" page, and per-rule inference hooks (section 5.4). Promoted to
+   mechanical: `functions/multiple-returns`, `functions/nargin` (both ways),
+   `indexing/grow-on-assign` (both ways) and `syntax/command-syntax`
+   (display-only commands dropped with a comment, `clear a b` is `del`).
+   Verification compares printed output on request and random values by
+   shape (section 12.1). All six corpus scripts run in the tests;
+   `beam_deflection`, `signal_filter` and `ode_rk4` translate completely and
+   verify both ways; `least_squares_fit` (26/27), `data_statistics` (27/28)
+   and `grid_heat` (20/26) report their holes by name.
 
 ## 12. Decisions
 

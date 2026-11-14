@@ -573,6 +573,14 @@ class _Inferrer:
                 or index_may_grow(target, before, self.analysis)
             ):
                 grown = array(None, None, elem=_numeric_elem(before or UNKNOWN, rhs))
+                # np.append and np.pad keep an integer dtype (np.zeros and
+                # [] are floats), so a later fractional store must be refused.
+                keeps_ints = (
+                    before is not None
+                    and before.kind not in (Kind.UNKNOWN, Kind.EMPTY)
+                    and before.int_dtype
+                    and rhs.int_dtype
+                )
                 if (
                     before is not None
                     and before.kind in (Kind.ROW, Kind.EMPTY)
@@ -581,7 +589,7 @@ class _Inferrer:
                     grown = array(1, None, elem=grown.elem)
                 elif before is not None and before.kind is Kind.COL and len(target.args) == 1:
                     grown = array(None, 1, elem=grown.elem)
-                return {**env, name: grown}
+                return {**env, name: replace(grown, int_dtype=keeps_ints)}
             elem = before.elem
             if rhs.elem is Elem.COMPLEX:
                 elem = Elem.COMPLEX

@@ -124,7 +124,9 @@ def _function(fdef: ir.FunctionDef, ctx: Context) -> list[Line]:
         lines = [header, *copies]
         ctx.indent += 1
         try:
-            inner = ctx.statements(body)
+            # `if p is None: p = <default>` for defaults that are not literals.
+            inner = nargin_rule.prologue(fdef, ctx) if nargin_rule is not None else []
+            inner.extend(ctx.statements(body))
             if tail is not None:
                 tail_lines = ctx.statement(tail)
                 code = [t for t in tail_lines if not t.text.startswith("#")]
@@ -306,7 +308,11 @@ def _lift_def(fdef: ast.FunctionDef, ctx: LiftContext) -> list[ir.Stmt]:
                 continue
             if not _copied_before_written(param, fdef.body, ctx):
                 ctx.decline(f"writing into the argument {param} (NumPy changes the caller's array)")
-        body = ctx.block(fdef.body)
+        prologue: list[ir.Stmt] = []
+        if fdef.args.defaults:
+            # Defaults are `if nargin < k` blocks (functions/nargin).
+            prologue = ctx.module_for("functions/nargin").lift_defaults(fdef, ctx)
+        body = [*prologue, *ctx.block(fdef.body)]
     return [
         ir.FunctionDef(loc=ctx.loc(fdef), name=fdef.name, params=params, outputs=outputs, body=body)
     ]
@@ -404,8 +410,12 @@ def _lift_call(node: ast.Call, ctx: LiftContext) -> ir.Expr:
     fdef = ctx.functions.get(func.id)
     if fdef is None or func.id in ctx.scope.variables:
         return ir.Call(loc=loc, func=func.id, args=args, handle=True)
-    if len(node.args) != len(fdef.args.args):
-        ctx.decline("a call that relies on default arguments")
+    required = len(fdef.args.args) - len(fdef.args.defaults)
+    if not required <= len(node.args) <= len(fdef.args.args):
+        ctx.decline("a call with the wrong number of arguments")
+    if len(node.args) < len(fdef.args.args):
+        # The omitted arguments take their defaults: `if nargin < k` on the .m side.
+        ctx.module_for("functions/nargin")
     returns = _returns(fdef.body)
     if any(isinstance(r.value, ast.Tuple) for r in returns):
         ctx.decline("using the whole tuple a function returns")

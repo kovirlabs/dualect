@@ -257,7 +257,7 @@ err = abs(area - 2);</code></pre>
       </figure>
 
       <h3>Reading the report</h3>
-      <p>For each statement, <code>translate</code> prints its line and column, its kind, the status used, whether it was verified, and the rules it used. Below a statement that was not translated, it prints why (for example <code>needs call:filter (no rule)</code>). The summary line counts statements by status, and the <code>verified:</code> line gives the verdict.</p>
+      <p>For each statement, <code>translate</code> prints its line and column, its kind, the status used, whether it was verified, and the rules it used. Below a statement that was not translated, it prints why (for example <code>needs call:cond (no rule)</code>). The summary line counts statements by status, and the <code>verified:</code> line gives the verdict.</p>
       <table>
         <caption>Exit codes of <code>dualect translate</code></caption>
         <thead>
@@ -316,11 +316,11 @@ err = abs(area - 2);</code></pre>
       <p>dualect is at version 0.1.0 and early. These numbers come from <code>dualect rules list</code> and the test suite.</p>
       <dl>
         <dt>Rules</dt>
-        <dd>35, with 49 case pairs between them.</dd>
+        <dd>61, with 88 case pairs between them.</dd>
         <dt><code>.m</code> to Python</dt>
-        <dd>30 <code>mechanical</code>, 5 <code>guided</code>.</dd>
+        <dd>58 <code>mechanical</code>, 3 <code>guided</code>.</dd>
         <dt>Python to <code>.m</code></dt>
-        <dd>29 <code>mechanical</code>, 3 <code>guided</code>; 3 rules cover constructs that exist only in <code>.m</code> code.</dd>
+        <dd>54 <code>mechanical</code>, 1 <code>guided</code>; 6 rules cover constructs that exist only in <code>.m</code> code.</dd>
       </dl>
 
       <h3>Rules not yet mechanical</h3>
@@ -330,17 +330,15 @@ err = abs(area - 2);</code></pre>
           <tr><th scope="col">Rule</th><th scope="col"><code>.m</code> to Python</th><th scope="col">Python to <code>.m</code></th><th scope="col">What is missing</th></tr>
         </thead>
         <tbody>
-          <tr><th scope="row"><code>functions/multiple-returns</code></th><td>guided</td><td>mechanical</td><td>Bodies that depend on <code>nargout</code> need to collapse into one tuple return.</td></tr>
-          <tr><th scope="row"><code>functions/nargin</code></th><td>guided</td><td>guided</td><td>Default-argument patterns need facts about arguments that the analysis does not derive.</td></tr>
-          <tr><th scope="row"><code>indexing/grow-on-assign</code></th><td>guided</td><td>guided</td><td>Growing an array past its end needs rewrites that span several statements.</td></tr>
-          <tr><th scope="row"><code>io/display</code></th><td>guided</td><td>guided</td><td><code>printf</code>-style formats and displaying values without a semicolon.</td></tr>
-          <tr><th scope="row"><code>syntax/command-syntax</code></th><td>guided</td><td>not applicable</td><td>Its case needs <code>strsplit</code>, which has no rule.</td></tr>
+          <tr><th scope="row"><code>builtins/tic-toc</code></th><td>guided</td><td>guided</td><td>Timing has no value to compare, and dropping it silently is a judgement, not a translation.</td></tr>
+          <tr><th scope="row"><code>functions/nargout</code></th><td>guided</td><td>not applicable</td><td>A body that skips work when fewer outputs are requested has no single Python form.</td></tr>
+          <tr><th scope="row"><code>io/display</code></th><td>guided</td><td>not applicable</td><td>A missing semicolon displays values in a format that depends on the value.</td></tr>
         </tbody>
       </table>
-      <p>The other 30 rules are <code>mechanical</code> in every direction they apply to. They cover comments and line continuation, array literals, character strings, one-based and logical indexing, <code>end</code> in an index, colon ranges, <code>A(:)</code>, arithmetic, division and linear solves, matrix and element-wise products and powers, transposes, comparisons, logical NOT and short-circuit logic, augmented assignment, <code>for</code>, <code>while</code>, <code>if</code> and <code>switch</code>, function definitions, constants, element-wise math, <code>zeros</code>/<code>ones</code>/<code>eye</code>, <code>linspace</code>, <code>size</code>/<code>numel</code>/<code>length</code>, <code>sum</code>/<code>mean</code>/<code>max</code>/<code>min</code>, <code>find</code> and <code>isempty</code>. The full list is in <a href="https://github.com/kovirlabs/dualect/blob/main/llms.txt"><code>llms.txt</code></a>.</p>
+      <p>The other 58 rules are <code>mechanical</code> in every direction they apply to. Besides the core language (literals, strings, indexing with <code>end</code>, ranges and masks, growing arrays, operators, control flow, functions with several outputs and <code>nargin</code> defaults, command syntax), they cover printing (<code>printf</code>, <code>fprintf</code>, <code>sprintf</code>, <code>disp</code>, <code>num2str</code>), <code>filter</code>, reductions and statistics (<code>sum</code>, <code>mean</code>, <code>max</code>, <code>min</code>, <code>prod</code>, <code>cumsum</code>, <code>cumprod</code>, <code>diff</code>, <code>any</code>, <code>all</code>, <code>std</code>, <code>var</code>, <code>median</code>), <code>sort</code>, <code>unique</code>, <code>flip</code>, <code>reshape</code>, <code>repmat</code>, concatenation, <code>meshgrid</code>, <code>rand</code>, linear algebra (<code>norm</code>, <code>dot</code>, <code>cross</code>, <code>kron</code>, <code>inv</code>, <code>det</code>, <code>trace</code>, <code>rank</code>), <code>interp1</code>, <code>polyfit</code>, <code>polyval</code>, <code>trapz</code> and element-wise math. The full list is in <a href="https://github.com/kovirlabs/dualect/blob/main/llms.txt"><code>llms.txt</code></a>.</p>
 
       <h3>Example scripts</h3>
-      <p>The repository's <a href="https://github.com/kovirlabs/dualect/tree/main/corpus"><code>corpus/</code></a> holds three realistic scripts that combine many constructs, translated from <code>.m</code> to Python in the test suite.</p>
+      <p>The repository's <a href="https://github.com/kovirlabs/dualect/tree/main/corpus"><code>corpus/</code></a> holds six realistic scripts that combine many constructs, translated from <code>.m</code> to Python in the test suite.</p>
       <table>
         <caption>Results for the example scripts, <code>.m</code> to Python</caption>
         <thead>
@@ -348,14 +346,17 @@ err = abs(area - 2);</code></pre>
         </thead>
         <tbody>
           <tr><th scope="row"><code>ode_rk4.m</code></th><td><data value="23">23</data></td><td><data value="23">23</data></td><td>0</td><td>Yes</td></tr>
-          <tr><th scope="row"><code>beam_deflection.m</code></th><td><data value="30">30</data></td><td><data value="29">29</data></td><td>1: <code>fprintf</code> is guided</td><td>No</td></tr>
-          <tr><th scope="row"><code>signal_filter.m</code></th><td><data value="33">33</data></td><td><data value="29">29</data></td><td>4: <code>filter</code> has no rule, and two <code>max</code> calls depend on its result</td><td>No</td></tr>
+          <tr><th scope="row"><code>beam_deflection.m</code></th><td><data value="30">30</data></td><td><data value="30">30</data></td><td>0</td><td>Yes</td></tr>
+          <tr><th scope="row"><code>signal_filter.m</code></th><td><data value="33">33</data></td><td><data value="33">33</data></td><td>0</td><td>Yes</td></tr>
+          <tr><th scope="row"><code>least_squares_fit.m</code></th><td><data value="27">27</data></td><td><data value="26">26</data></td><td>1: <code>cond</code> has no rule</td><td>No</td></tr>
+          <tr><th scope="row"><code>data_statistics.m</code></th><td><data value="28">28</data></td><td><data value="27">27</data></td><td>1: <code>round</code> of an expression is declined</td><td>No</td></tr>
+          <tr><th scope="row"><code>grid_heat.m</code></th><td><data value="26">26</data></td><td><data value="20">20</data></td><td>6: <code>trapz</code> along a dimension, <code>ind2sub</code>, and shapes lost after slicing</td><td>No</td></tr>
         </tbody>
       </table>
-      <p>In the other direction, the Python that dualect writes for <code>ode_rk4.m</code> translates back to <code>.m</code> completely and verifies against that Python.</p>
+      <p>In the other direction, the Python that dualect writes for the three complete scripts translates back to <code>.m</code> completely and verifies against that Python.</p>
 
       <h3>Not supported yet</h3>
-      <p>Any construct without a rule is reported as unsupported. Today that includes cell arrays, structs, plotting, random numbers, file input and output, and most built-in functions beyond the list above, including <code>filter</code>. Classes (<code>classdef</code>), GUIs, Simulink, MEX files and toolboxes are out of scope for now.</p>
+      <p>Any construct without a rule is reported as unsupported. Today that includes cell arrays, structs, plotting, file input and output, and built-in functions beyond the list above. Classes (<code>classdef</code>), GUIs, Simulink, MEX files and toolboxes are out of scope for now.</p>
     </section>
 
     <section id="links" aria-labelledby="links-title">

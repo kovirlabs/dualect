@@ -1,6 +1,6 @@
 id: syntax/command-syntax
 title: "Command syntax: `name arg1 arg2` vs `name('arg1', 'arg2')`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [syntax:command]
 octave: |
@@ -8,14 +8,16 @@ octave: |
   format long      % format('long')
   clear a b        % clear('a', 'b')
 python: |
-  # hold on: matplotlib keeps adding to the current axes by default
-  np.set_printoptions(precision=16)
+  # hold on: display only (matplotlib keeps adding to the current axes anyway)
+  # format long: display only
   del a, b
 why: >
   A statement `name word1 word2` calls `name('word1', 'word2')`: every word is
   passed as a literal string, never evaluated. Rewrite it in function form
   first, then translate the call. Many commands (`hold`, `format`, `more`,
-  `clc`, `close all`) only change display state and have no numeric effect.
+  `clc`, `close all`) only change display state and have no numeric effect:
+  they are dropped, with a comment that says so. `clear a b` deletes the
+  variables (`del a, b`); other commands are not translated mechanically.
 pitfalls:
   - >-
     `disp x` prints the letter x, not the value of `x`.
@@ -27,6 +29,9 @@ pitfalls:
     must be `x = load('data.txt')`.
   - >-
     `clear` alone empties the whole workspace and `clear all` also drops
-    functions; in a translated script these usually become nothing at all.
+    functions; neither is translated (a script that clears everything usually
+    wants nothing in Python, but that is a judgement, not a translation).
+  - >-
+    `pkg load statistics` changes which functions exist; it is not dropped.
 related: [functions/definition]
-python_imports: [import numpy as np]
+python_imports: []

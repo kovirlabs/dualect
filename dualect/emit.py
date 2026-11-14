@@ -490,7 +490,10 @@ class Context:
             return self._lines(self.stmt_translator("assign:multi").translate(stmt, self))
         target = targets[0]
         if isinstance(target, ir.Index):
-            module = self.stmt_translator("index:paren")
+            findings = self.scan.uses_by_stmt.get(id(stmt), [])
+            # A store past the end grows the array: that rule's business.
+            tag = "assign:grow" if any(f.tag == "assign:grow" for f in findings) else "index:paren"
+            module = self.stmt_translator(tag)
             return self._lines(module.translate_store(stmt, self))
         if not isinstance(target, ir.Name):
             raise _Unsupported(primary_tag(target, self.analysis) or "parse:error", None)

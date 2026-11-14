@@ -1,30 +1,58 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Evan Gress
 
-"""Translator for functions/multiple-returns (Python -> ``.m`` only, for now).
+"""Translator for functions/multiple-returns.
 
-``.m`` -> Python is still ``guided``: ``nargout``-dependent bodies would have to
-be collapsed into one tuple return (docs/design.md section 11).
+``.m`` -> Python: a function with several outputs returns them as one tuple
+(functions/definition writes ``return s, p``); ``[s, p] = f(v)`` unpacks it
+(``s, p = f(v)``), ``[~, p] = f(v)`` unpacks into ``_``, and taking fewer
+outputs than the function has slices the tuple (``[a, b] = f(x)`` of a
+three-output ``f`` is ``a, b = f(x)[:2]``); a single output is
+``f(v)[0]`` (functions/definition). A function whose body depends on
+``nargout`` is functions/nargout's business (guided).
 
 Python -> ``.m``: ``return a, b`` gives the function the outputs ``[a, b]``
 (functions/definition picks the names); ``s, p = f(v)`` is
 ``[s, p] = f(v)``; ``f(v)[0]`` is ``f(v)``, the first output; ``r, c =
-A.shape`` is ``[r, c] = size(A)`` (builtins/size-numel-length), and
-``r, c = np.nonzero(A)`` goes to builtins/find. Unpacking a
-tuple literal (``a, b = b, a``) evaluates every value before assigning,
+A.shape`` is ``[r, c] = size(A)`` (builtins/size-numel-length), and a
+built-in with several results goes to its own rule's ``lift_multi``. Unpacking
+a tuple literal (``a, b = b, a``) evaluates every value before assigning,
 which a sequence of ``.m`` assignments does not, so it is declined.
 """
 
 import ast
 
 from dualect import ir
-from dualect.emit import Context
+from dualect.emit import Context, Line
 from dualect.lift import LiftContext
 
 
-def translate(node: ir.Node, ctx: Context) -> None:
-    """The ``.m`` -> Python direction is guided: never called for this rule."""
-    ctx.decline("multiple returns are translated by an LLM in this direction")
+def translate(node: ir.Node, ctx: Context) -> list[Line]:
+    """``[a, b] = f(x)`` for a function defined in the file."""
+    if not isinstance(node, ir.Assign):
+        ctx.decline("this multiple-output form")
+    call = node.value
+    if not (isinstance(call, ir.Call) and call.local):
+        ctx.decline("several outputs of something other than a function in this file")
+    fdef = ctx.functions.get(call.func)
+    if fdef is None:
+        ctx.decline(f"several outputs of {call.func}")
+    if len(node.targets) > len(fdef.outputs):
+        ctx.decline(f"more outputs than {call.func} has")
+    names: list[str] = []
+    for target in node.targets:
+        if isinstance(target, ir.Ignore):
+            names.append("_")
+        elif isinstance(target, ir.Name) and not ctx.is_index_var(target.id):
+            names.append(target.id)
+        else:
+            ctx.decline("an output assigned into an element or stored 0-based")
+    # The call itself, as functions/definition writes it (defaults, None for []).
+    single = ctx.module("functions/definition").translate(call, ctx)
+    result = single.value if isinstance(single, ast.Subscript) else single
+    if len(node.targets) < len(fdef.outputs):
+        result = ast.Subscript(value=result, slice=ast.Slice(upper=ast.Constant(len(node.targets))))
+    return [ctx.line(f"{', '.join(names)} = {ast.unparse(result)}")]
 
 
 def _outputs(name: str, ctx: LiftContext) -> int:
@@ -53,6 +81,20 @@ def lift_multi(stmt: ast.Assign, ctx: LiftContext) -> list[ir.Stmt]:
         if hook is None:
             ctx.decline(f"unpacking the result of {tag}")
         return list(hook(stmt, ctx))
+    taken: int | None = None
+    if isinstance(value, ast.Subscript):
+        # f(x)[:2]: the first two outputs, which is what [a, b] = f(x) takes.
+        bound = value.slice
+        if not (
+            isinstance(bound, ast.Slice)
+            and bound.lower is None
+            and bound.step is None
+            and isinstance(bound.upper, ast.Constant)
+            and type(bound.upper.value) is int
+        ):
+            ctx.decline("unpacking a slice of the outputs other than the first ones")
+        taken = bound.upper.value
+        value = value.value
     if not (
         isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
@@ -60,13 +102,19 @@ def lift_multi(stmt: ast.Assign, ctx: LiftContext) -> list[ir.Stmt]:
         and value.func.id not in ctx.scope.variables
     ):
         ctx.decline("unpacking a value that is not a call of a local function")
-    if _outputs(value.func.id, ctx) != len(target.elts):
+    returned = _outputs(value.func.id, ctx)
+    if (taken if taken is not None else returned) != len(target.elts) or len(
+        target.elts
+    ) > returned:
         ctx.decline("unpacking a different number of values than the function returns")
     names: list[ir.Expr] = []
     for element in target.elts:
         if not isinstance(element, ast.Name):
             ctx.decline("unpacking into an element")
-        names.append(ir.Name(loc=ctx.loc(element), id=element.id))
+        if element.id == "_":
+            names.append(ir.Ignore(loc=ctx.loc(element)))  # a discarded output: ~
+        else:
+            names.append(ir.Name(loc=ctx.loc(element), id=element.id))
     if value.keywords:
         ctx.decline("keyword arguments")
     literals = ctx.module_for("syntax/array-literals")

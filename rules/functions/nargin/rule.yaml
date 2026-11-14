@@ -1,10 +1,10 @@
 id: functions/nargin
 title: "Optional arguments with `nargin`"
-status: guided
+status: mechanical
 dialects: [octave, matlab]
 match: [func:nargin]
 from_python:                  # the Python -> .m direction
-  status: guided
+  status: mechanical
   match:
     - py:def-default
     - py:none
