@@ -30,6 +30,38 @@ match:
   - call:isnan
   - call:isinf
   - call:isfinite
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.abs
+    - py:call:np.sqrt
+    - py:call:np.exp
+    - py:call:np.log
+    - py:call:np.log2
+    - py:call:np.log10
+    - py:call:np.sin
+    - py:call:np.cos
+    - py:call:np.tan
+    - py:call:np.arcsin
+    - py:call:np.arccos
+    - py:call:np.arctan
+    - py:call:np.arctan2
+    - py:call:np.sinh
+    - py:call:np.cosh
+    - py:call:np.tanh
+    - py:call:np.floor
+    - py:call:np.ceil
+    - py:call:np.trunc
+    - py:call:np.sign
+    - py:call:np.isnan
+    - py:call:np.isinf
+    - py:call:np.isfinite
+    - py:call:np.mod
+    - py:call:np.fmod
+    - py:call:np.hypot
+    - py:call:np.round
+    - py:call:abs
+    - py:op:mod
 octave: |
   a = abs(x);
   f = fix(x);         % toward zero

@@ -3,6 +3,20 @@ title: "`+`, `-`, comparisons and implicit expansion"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:plus, op:minus, op:uminus, op:uplus, op:eq, op:lt, op:le, op:gt, op:ge]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:add
+    - py:op:sub
+    - py:op:usub
+    - py:op:uadd
+    - py:cmp:eq
+    - py:cmp:lt
+    - py:cmp:lte
+    - py:cmp:gt
+    - py:cmp:gte
+    - py:index:newaxis
+    - py:const:np.newaxis
 octave: |
   s = a + b;
   big = v > 1;

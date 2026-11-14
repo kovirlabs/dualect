@@ -114,6 +114,32 @@
           "minimum": 0
         }
       }
+    },
+    "from_python": {
+      "description": "The Python -> .m direction: its own lifecycle stage and the Python construct tags (dualect/pyconstructs.py) this rule covers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "match"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "unsupported",
+            "guided",
+            "mechanical"
+          ]
+        },
+        "match": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^py:[a-z-]+(:[A-Za-z0-9_.-]+)?$"
+          },
+          "uniqueItems": true
+        }
+      }
     }
   },
   "$defs": {

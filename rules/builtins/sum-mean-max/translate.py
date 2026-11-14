@@ -19,6 +19,7 @@ import ast
 from dualect import ir
 from dualect.emit import Context, Line
 from dualect.infer import Info, Kind
+from dualect.lift import LiftContext
 
 _NAN_SKIPPING = {"max": "nanmax", "min": "nanmin"}
 _PAIRWISE = {"max": ("maximum", "fmax"), "min": ("minimum", "fmin")}
@@ -152,3 +153,163 @@ def translate_multi(stmt: ir.Assign, ctx: Context) -> list[Line]:
     if isinstance(position_target, ir.Index):
         ctx.decline("assigning a position into an element")
     return lines
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# x.sum() of a 1-D array is sum(x); of a 2-D array (all elements) sum(A(:)).
+# axis=0 reduces down the columns, sum(A, 1), a row; axis=1 is sum(A, 2), a
+# column on the .m side and 1-D in NumPy, so it is turned into a row. The
+# .m max/min skip NaN where NumPy's max propagates it, so .max() of data not
+# known to be NaN-free is declined and np.nanmax is plain max. np.argmax has no
+# expression form: i = np.argmax(v) becomes [~, i] = max(v); i = i - 1, kept
+# 0-based so the value equals Python's. np.fmax (NaN-skipping) is max(a, b);
+# np.maximum is too when no NaN can occur; np.clip(x, lo, hi) is
+# min(max(x, lo), hi); np.count_nonzero is nnz.
+
+_SKIPS_NAN = {"nanmax": "max", "nanmin": "min", "fmax": "max", "fmin": "min"}
+_ARG = {"argmax": "max", "argmin": "min", "nanargmax": "max", "nanargmin": "min"}
+
+
+def _name(node: ast.Call, ctx: LiftContext) -> tuple[str, ast.expr | None, list[ast.expr]]:
+    """``(function, receiver or first argument, remaining arguments)`` of a call."""
+    tag = ctx.tag(node) or ""
+    if tag.startswith("py:method:"):
+        assert isinstance(node.func, ast.Attribute)
+        return tag.removeprefix("py:method:"), node.func.value, list(node.args)
+    name = tag.split(":")[-1].removeprefix("np.")
+    if not node.args:
+        return name, None, []
+    return name, node.args[0], list(node.args[1:])
+
+
+def _axis(node: ast.Call, rest: list[ast.expr], ctx: LiftContext) -> int | None:
+    axis_node = rest[0] if rest else None
+    for keyword in node.keywords:
+        if keyword.arg == "axis":
+            axis_node = keyword.value
+        else:
+            ctx.decline(f"{keyword.arg}= in a reduction")
+    if axis_node is None:
+        return None
+    value = ctx.info(axis_node).value
+    if value not in (0, 1, -1, -2) or isinstance(value, bool):
+        ctx.decline("a reduction along a computed axis")
+    assert isinstance(value, int)
+    return value % 2
+
+
+def reduce(func: str, data: ast.expr, axis: int | None, ctx: LiftContext, loc: ir.Loc) -> ir.Expr:
+    """``func`` of ``data`` (over ``axis``) as the ``.m`` reduction of the same values."""
+    info = ctx.info(data)
+    value = ctx.module_for("syntax/array-literals").lift_items(data, ctx)
+    if info.is_vector or isinstance(data, ast.List):
+        if axis not in (None, 0):
+            ctx.decline("a reduction of a 1-D array along axis 1")
+        return ctx.call(func, value, loc=loc)
+    if not info.is_matrix:
+        ctx.decline(f"{func} of a value whose dimensions are unknown")
+    if axis is None:
+        return ctx.call(func, ir.Index(loc=loc, target=value, args=[ir.Colon(loc=loc)]), loc=loc)
+    if func in ("max", "min"):
+        result = ctx.call(func, value, ir.Matrix(loc=loc, rows=[]), ctx.num(axis + 1), loc=loc)
+    else:
+        result = ctx.call(func, value, ctx.num(axis + 1), loc=loc)
+    return result if axis == 0 else ctx.transpose(result)
+
+
+def _finite(node: ast.expr, ctx: LiftContext) -> bool:
+    if isinstance(node, ast.List):
+        return all(_finite(e, ctx) for e in node.elts)
+    return ctx.info(node).finite
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """A reduction, a pairwise max/min, ``np.clip`` or ``np.count_nonzero``."""
+    assert isinstance(node, ast.Call)
+    loc = ctx.loc(node)
+    literals = ctx.module_for("syntax/array-literals")
+    func, data, rest = _name(node, ctx)
+    tag = ctx.tag(node) or ""
+    if func in _ARG:
+        ctx.decline(f"np.{func} inside an expression (it needs its own statement)")
+    if tag in ("py:call:max", "py:call:min"):
+        return _builtin(node, func, ctx)
+    if data is None:
+        ctx.decline(f"{func} without arguments")
+    if func in ("maximum", "minimum", "fmax", "fmin"):
+        if len(rest) != 1 or node.keywords:
+            ctx.decline(f"np.{func} with these arguments")
+        if func in ("maximum", "minimum") and not (_finite(data, ctx) and _finite(rest[0], ctx)):
+            ctx.decline(f"np.{func} of data that may hold NaN (the .m {func[:3]} skips NaN)")
+        name = func[:3] if func in ("maximum", "minimum") else _SKIPS_NAN[func]
+        return ctx.call(
+            name, literals.lift_items(data, ctx), literals.lift_items(rest[0], ctx), loc=loc
+        )
+    if func == "clip":
+        if len(rest) != 2 or node.keywords or not _finite(data, ctx):
+            ctx.decline("np.clip of data that may hold NaN, or with these arguments")
+        if any(isinstance(b, ast.Constant) and b.value is None for b in rest):
+            ctx.decline("np.clip with an open bound")
+        low = ctx.call("max", literals.lift_items(data, ctx), ctx.expr(rest[0]), loc=loc)
+        return ctx.call("min", low, ctx.expr(rest[1]), loc=loc)
+    if func == "count_nonzero":
+        if rest or node.keywords:
+            ctx.decline("np.count_nonzero along an axis")
+        return ctx.call("nnz", literals.lift_items(data, ctx), loc=loc)
+    axis = _axis(node, rest, ctx)
+    if func in ("max", "min") and not _finite(data, ctx):
+        ctx.decline(
+            f"{func} of data that may hold NaN (NumPy propagates it, the .m {func} skips it)"
+        )
+    return reduce(_SKIPS_NAN.get(func, func), data, axis, ctx, loc)
+
+
+def _builtin(node: ast.Call, func: str, ctx: LiftContext) -> ir.Expr:
+    """Python's own ``max``/``min``: of ``A.shape``, of a list, or of scalars."""
+    loc = ctx.loc(node)
+    if node.keywords or not node.args:
+        ctx.decline(f"{func}() with these arguments")
+    if len(node.args) == 1:
+        arg = node.args[0]
+        if isinstance(arg, ast.Attribute) and arg.attr == "shape":
+            shape = ctx.module_for("builtins/size-numel-length").lift_shape(arg, ctx)
+            return ctx.call(func, shape, loc=loc)
+        if not _finite(arg, ctx):
+            ctx.decline(f"{func}() of data that may hold NaN")
+        return reduce(func, arg, None, ctx, loc)
+    if not all(ctx.info(a).is_scalar and ctx.info(a).finite for a in node.args):
+        ctx.decline(f"{func}() of values that are not finite scalars")
+    result = ctx.expr(node.args[0])
+    for arg in node.args[1:]:
+        result = ctx.call(func, result, ctx.expr(arg), loc=loc)
+    return result
+
+
+def lift_assign(stmt: ast.Assign, ctx: LiftContext) -> list[ir.Stmt] | None:
+    """``i = np.argmax(v)``: ``[~, i] = max(v); i = i - 1`` (0-based, as in Python)."""
+    value = stmt.value
+    target = stmt.targets[0]
+    assert isinstance(value, ast.Call)
+    func, data, rest = _name(value, ctx)
+    if func not in _ARG:
+        return None
+    if data is None or rest or value.keywords or not isinstance(target, ast.Name):
+        ctx.decline(f"{func} with these arguments")
+    info = ctx.info(data)
+    if not (info.is_vector or isinstance(data, ast.List)):
+        ctx.decline(f"{func} of a value that is not 1-D (NumPy flattens it in row order)")
+    if not func.startswith("nan") and not _finite(data, ctx):
+        ctx.decline(f"{func} of data that may hold NaN (NumPy stops at the first NaN)")
+    loc = ctx.loc(stmt)
+    name = ir.Name(loc=ctx.loc(target), id=target.id)
+    values = ctx.module_for("syntax/array-literals").lift_items(data, ctx)
+    found = ir.Assign(
+        loc=loc, targets=[ir.Ignore(loc=loc), name], value=ctx.call(_ARG[func], values, loc=loc)
+    )
+    shifted = ir.Assign(
+        loc=loc,
+        targets=[ir.Name(loc=loc, id=target.id)],
+        value=ctx.binop("minus", ir.Name(loc=loc, id=target.id), ctx.num(1)),
+    )
+    return [found, shifted]

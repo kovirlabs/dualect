@@ -3,6 +3,10 @@ title: "Logical (mask) indexing"
 status: mechanical
 dialects: [octave, matlab]
 match: [index:logical, index:delete]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:index:mask
 octave: |
   big = x(x > 2);
   x(x < 0) = 0;

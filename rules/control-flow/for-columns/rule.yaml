@@ -3,6 +3,11 @@ title: "`for` loops iterate over columns"
 status: mechanical
 dialects: [octave, matlab]
 match: [stmt:for]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:for
+    - py:call:range
 octave: |
   for c = A           % c is each column of A
     total = total + c;

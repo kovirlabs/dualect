@@ -3,6 +3,11 @@ title: "One-based indexing and column-major linear indices"
 status: mechanical
 dialects: [octave, matlab]
 match: [index:paren, index:colon]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:subscript
+    - py:assign-store
 octave: |
   first = x(1);
   a23 = A(2, 3);

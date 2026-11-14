@@ -8,8 +8,9 @@
     dualect scan script.m [--json]         # which rules does this file need?
     dualect context script.m               # LLM-ready context for those rules
     dualect translate script.m -o out.py [--strict] [--dialect matlab@R2023a]
+    dualect translate script.py -o out.m [--strict]   # the other direction
     dualect verify script.m script.py      # run both, compare
-    dualect rules list [--status guided]
+    dualect rules list [--status guided] [--direction from-python]
     dualect rules new indexing/foo
 
 Exit codes: 0 success; 1 verification or validation failed, ``--strict``
@@ -31,7 +32,7 @@ from dualect.dialect import parse_dialect
 from dualect.errors import DualectError
 from dualect.paths import default_rules_dir
 from dualect.pipeline import StrictModeError, translate_file
-from dualect.rulebook import Status, load_rules
+from dualect.rulebook import DIRECTIONS, TO_PYTHON, Status, load_rules
 from dualect.scaffold import new_rule
 from dualect.scan import ScanResult, scan_file
 from dualect.verify import options_for_pair, verify_pair
@@ -103,15 +104,20 @@ def _verify(args: argparse.Namespace) -> int:
 
 def _rules_list(args: argparse.Namespace) -> int:
     """Handle ``dualect rules list``."""
-    status = Status(args.status) if args.status else None
-    rules = load_rules(rules_dir=args.rules_dir, status=status)
+    rules = load_rules(rules_dir=args.rules_dir)
+    if args.status:
+        wanted = Status(args.status)
+        rules = [rule for rule in rules if rule.status_for(args.direction) is wanted]
     if not rules:
         print("no rules found", file=sys.stderr)
         return EXIT_OK
     width = max(len(rule.id) for rule in rules)
+    print(f"{'rule':<{width}}  {'to-python':<11}  {'from-python':<11}  cases  title")
     for rule in rules:
+        reverse = rule.python_status.value if rule.python_status is not None else "-"
         print(
-            f"{rule.id:<{width}}  {rule.status.value:<11}  {len(rule.cases):>2} cases  {rule.title}"
+            f"{rule.id:<{width}}  {rule.status.value:<11}  {reverse:<11}  "
+            f"{len(rule.cases):>5}  {rule.title}"
         )
     return EXIT_OK
 
@@ -134,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     def add_source_options(sub: argparse.ArgumentParser) -> None:
-        sub.add_argument("source", type=Path, help="the .m file")
+        sub.add_argument("source", type=Path, help="the .m file, or a .py file for .py -> .m")
         sub.add_argument(
             "--dialect", help="source dialect and version, e.g. octave or matlab@R2023a"
         )
@@ -150,10 +156,13 @@ def build_parser() -> argparse.ArgumentParser:
     context.set_defaults(handler=_context)
 
     translate = commands.add_parser(
-        "translate", help="translate a .m file to Python/NumPy, then verify it by execution"
+        "translate",
+        help="translate a .m file to Python/NumPy (or a .py file to .m), then verify by execution",
     )
     add_source_options(translate)
-    translate.add_argument("-o", "--output", type=Path, required=True, help="the .py to write")
+    translate.add_argument(
+        "-o", "--output", type=Path, required=True, help="the file to write (.py, or .m)"
+    )
     translate.add_argument(
         "--strict",
         action="store_true",
@@ -191,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
     rule_commands = rules.add_subparsers(dest="rules_command", required=True, metavar="ACTION")
     listing = rule_commands.add_parser("list", help="list rules with status and case count")
     listing.add_argument("--status", choices=[status.value for status in Status])
+    listing.add_argument(
+        "--direction",
+        choices=list(DIRECTIONS),
+        default=TO_PYTHON,
+        help="which direction --status filters on (default: to-python)",
+    )
     listing.set_defaults(handler=_rules_list)
     create = rule_commands.add_parser("new", help="scaffold rules/<category>/<rule-id>/")
     create.add_argument("rule_id", metavar="CATEGORY/ID")

@@ -3,10 +3,9 @@
 Translate numeric code between Octave/MATLAB-style `.m` files and Python/NumPy,
 in both directions, with every translation **verified by running both sides**.
 
-> **Status: early.** Octave → Python works end to end: `scan`, `context`,
-> `translate` and `verify`, with 35 rules, 30 of them translated mechanically and every
-> case verified in both languages. Python → Octave is next. See
-> [docs/design.md](docs/design.md) section 11.
+> **Status: early.** Both directions work end to end: `.m` → Python with 30 of 35
+> rules mechanical, Python → `.m` with 29 mechanical, every case verified by running
+> both languages. See [docs/design.md](docs/design.md) section 11.
 
 ## Why
 
@@ -23,17 +22,17 @@ result is executed and compared.
 
 ```bash
 uv sync --all-groups                             # install (Python 3.11+, uv)
+uv run pytest                                    # rules, translators, corpus
+```
+
+### `.m` → Python
+
+```bash
 uv run dualect translate script.m -o script.py   # translate, then verify by running both
 uv run dualect scan script.m                     # which rules does it need? what has none?
 uv run dualect context script.m                  # those rules as LLM-ready prompt context
 uv run dualect verify script.m script.py         # run both sides, compare every variable
-uv run dualect rules list [--status guided]
-uv run dualect rules new indexing/foo            # scaffold a rule folder
-uv run pytest                                    # rules, translators, corpus
 ```
-
-`translate`, `verify` and the execution tests need GNU Octave (`brew install octave`,
-`apt install octave`).
 
 `translate` handles each statement with the rules' deterministic translators. A
 statement it cannot translate correctly is left as a `TODO(dualect)` hole that raises
@@ -45,6 +44,32 @@ marks a variable stored 0-based because it only ever holds positions.
 
 The `.m` side may use Octave syntax (`#` comments, `!=`, `++`, `+=`,
 `do ... until`, `endfunction`); `--dialect matlab` reports it as Octave-only.
+
+### Python → `.m`
+
+```bash
+uv run dualect translate model.py -o model.m     # the direction follows the suffix
+uv run dualect scan model.py                     # rules needed, Python constructs with none
+uv run dualect context model.py
+```
+
+The same rules translate back: a 1-D NumPy array becomes a `1xN` row, `A @ v`
+becomes `(A * v.').'`, `x[i]` becomes `x(i + 1)` (variables keep their Python
+values), and the output is checked by running the `.py` and the `.m`. Holes are
+`% TODO(dualect)` comments followed by `error(...)`. Python behaviour with no `.m`
+counterpart is declined, not imitated: writing through a NumPy view or alias, a
+function writing into its array argument, a lambda that reads a variable changed
+later, `max` of data that may hold NaN, and the like (design section 5.5).
+
+### Rules
+
+```bash
+uv run dualect rules list [--status guided] [--direction from-python]
+uv run dualect rules new indexing/foo            # scaffold a rule folder
+```
+
+`translate`, `verify` and the execution tests need GNU Octave (`brew install octave`,
+`apt install octave`).
 
 ## License
 

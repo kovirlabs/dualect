@@ -3,6 +3,12 @@ title: "`A(:)`: all elements as one column"
 status: mechanical
 dialects: [octave, matlab]
 match: [index:colon-all]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:method:ravel
+    - py:method:flatten
+    - py:method:reshape
 octave: |
   v = A(:);           % column, column-major
   A(:) = 0;

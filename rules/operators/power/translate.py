@@ -18,6 +18,7 @@ import ast
 from dualect import ir
 from dualect.emit import Context, int_constant
 from dualect.infer import Info
+from dualect.lift import LiftContext
 
 
 def _float_exponent(exponent: ast.expr) -> ast.expr:
@@ -75,3 +76,27 @@ def translate(node: ir.BinOp, ctx: Context) -> ast.expr:
         ctx.assume(f"scalar base {ast.unparse(a)}")
         return ast.BinOp(left=a, op=ast.Pow(), right=b)
     ctx.decline("a matrix power with these shapes")
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# ** is .^ (^ between scalars); np.linalg.matrix_power(A, k) is A ^ k. A
+# fractional power of a negative array element is NaN in NumPy but complex on
+# the .m side, so such a power is assumed to stay in the real domain.
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """``**`` and ``np.linalg.matrix_power``."""
+    loc = ctx.loc(node)
+    if isinstance(node, ast.Call):
+        if len(node.args) != 2 or node.keywords or not ctx.info(node.args[0]).is_matrix:
+            ctx.decline("matrix_power with these arguments")
+        return ctx.binop("mpower", ctx.expr(node.args[0]), ctx.expr(node.args[1]), loc=loc)
+    assert isinstance(node, ast.BinOp)
+    base, exponent = ctx.info(node.left), ctx.info(node.right)
+    if base.is_bool and exponent.is_bool:
+        ctx.decline("a power of booleans")
+    if base.is_array and not base.nonneg and exponent.dtype.value not in ("int", "bool"):
+        ctx.assume("non-negative base or integer exponent")
+    op = "mpower" if base.is_scalar and exponent.is_scalar else "power"
+    return ctx.binop(op, ctx.expr(node.left), ctx.expr(node.right), loc=loc)

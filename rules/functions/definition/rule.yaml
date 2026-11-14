@@ -3,6 +3,14 @@ title: "Function definitions and argument copy semantics"
 status: mechanical
 dialects: [octave, matlab]
 match: [func:definition, func:handle, func:call-local, func:call-handle, stmt:return, syntax:script-marker]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:def
+    - py:return
+    - py:lambda
+    - py:call-local
+    - py:call-handle
 octave: |
   function y = area(r)
     y = pi * r.^2;

@@ -13,6 +13,7 @@ import ast
 
 from dualect import ir
 from dualect.emit import Context
+from dualect.lift import LiftContext
 
 
 def _transpose(expr: ast.expr) -> ast.expr:
@@ -50,3 +51,46 @@ def translate(node: ir.BinOp, ctx: Context) -> ast.expr:
             return ctx.call(ctx.np("linalg.solve"), ctx.expr(node.left), ctx.expr(node.right))
         ctx.decline("left division by a matrix that is not known to be square")
     ctx.decline(f"operator {node.op}")
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# Python's / is always true division: ./ (or / by a scalar). a // b floors:
+# floor(a ./ b). np.linalg.solve(A, b) is A \ b; a 1-D b is a row on the .m side,
+# so the solve is (A \ b.').'.
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """``/``, ``//`` and ``np.linalg.solve``."""
+    loc = ctx.loc(node)
+    if isinstance(node, ast.Call):
+        if len(node.args) != 2 or node.keywords:
+            ctx.decline("np.linalg.solve with these arguments")
+        a_node, b_node = node.args
+        if not ctx.info(a_node).is_matrix:
+            ctx.decline("solving with a value not known to be a matrix")
+        a = ctx.expr(a_node)
+        b_info = ctx.info(b_node)
+        if b_info.is_matrix:
+            return ctx.binop("mldivide", a, ctx.expr(b_node), loc=loc)
+        if b_info.is_vector or isinstance(b_node, ast.List):
+            b = ctx.module_for("syntax/array-literals").lift_items(b_node, ctx)
+            return ctx.transpose(ctx.binop("mldivide", a, ctx.transpose(b), loc=loc))
+        ctx.decline("solving for a right-hand side of unknown dimensions")
+    assert isinstance(node, ast.BinOp)
+    left, right = ctx.expr(node.left), ctx.expr(node.right)
+    by_scalar = ctx.info(node.right).is_scalar
+    op = "mrdivide" if by_scalar else "rdivide"
+    if not (by_scalar or ctx.info(node.right).is_array):
+        ctx.assume("element-wise division")
+    quotient = ctx.binop(op, left, right, loc=loc)
+    if isinstance(node.op, ast.Div):
+        return quotient
+    if isinstance(node.op, ast.FloorDiv):
+        divisor = ctx.info(node.right).value
+        if divisor == 0:
+            ctx.decline("floor division by zero")
+        if divisor is None:
+            ctx.assume("nonzero divisor in //")
+        return ctx.call("floor", quotient, loc=loc)
+    ctx.decline(f"operator {type(node.op).__name__}")

@@ -16,6 +16,7 @@ import ast
 from dualect import ir
 from dualect.emit import Context
 from dualect.infer import Kind
+from dualect.lift import LiftContext
 
 
 def translate(node: ir.Matrix, ctx: Context) -> ast.expr:
@@ -69,3 +70,80 @@ def _concatenate(node: ir.Matrix, infos: list[list], ctx: Context) -> ast.expr:
                 parts = [ctx.expr(row[0]) for row in rows]
                 return ctx.call(ctx.np("vstack"), ast.Tuple(elts=parts))
     ctx.decline("this concatenation")
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# A 1-D NumPy array is a 1xN row on the .m side, a list of lists a matrix.
+# np.concatenate of 1-D parts is [a, b]; of 2-D parts (axis 0) [A; B];
+# np.vstack stacks rows, np.column_stack turns 1-D parts into columns.
+
+
+def lift_items(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """A list (or tuple) of scalars as a row, of equal rows as a matrix; else the value."""
+    loc = ctx.loc(node)
+    if not isinstance(node, ast.List | ast.Tuple):
+        return ctx.expr(node)
+    elts = node.elts
+    if all(isinstance(e, ast.List | ast.Tuple) for e in elts) and elts:
+        rows = [[ctx.expr(x) for x in row.elts] for row in elts]  # type: ignore[attr-defined]
+        if len({len(row) for row in rows}) != 1:
+            ctx.decline("rows of different lengths")
+        if not all(ctx.info(x).is_scalar for row in elts for x in row.elts):  # type: ignore[attr-defined]
+            ctx.decline("a nested list of arrays")
+        return ir.Matrix(loc=loc, rows=rows)
+    if not all(ctx.info(e).is_scalar for e in elts):
+        ctx.decline("a list of arrays")
+    return ir.Matrix(loc=loc, rows=[[ctx.expr(e) for e in elts]] if elts else [])
+
+
+def _parts(node: ast.Call, ctx: LiftContext) -> list[ast.expr]:
+    if len(node.args) != 1 or node.keywords or not isinstance(node.args[0], ast.Tuple | ast.List):
+        ctx.decline(f"{ast.unparse(node.func)} with these arguments")
+    return list(node.args[0].elts)
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """``np.array``, a list argument, and the stacking functions."""
+    loc = ctx.loc(node)
+    if isinstance(node, ast.List):
+        return lift_items(node, ctx)
+    if not isinstance(node, ast.Call):
+        ctx.decline("a tuple used as a value")
+    name = ctx.tag(node)
+    if name == "py:call:np.array":
+        if len(node.args) != 1 or node.keywords:
+            ctx.decline("np.array with a dtype or other options")
+        return lift_items(node.args[0], ctx)
+    parts = _parts(node, ctx)
+    infos = [ctx.info(p) for p in parts]
+    lifted = [lift_items(p, ctx) for p in parts]
+    one_d = all(
+        i.is_vector or i.is_scalar or isinstance(p, ast.List)
+        for i, p in zip(infos, parts, strict=True)
+    )
+    two_d = all(i.is_matrix for i in infos)
+    if name == "py:call:np.concatenate":
+        if one_d:
+            return ir.Matrix(loc=loc, rows=[lifted])
+        if two_d:
+            return ir.Matrix(loc=loc, rows=[[part] for part in lifted])
+        ctx.decline("concatenating values of unknown or mixed dimensions")
+    if name == "py:call:np.vstack":
+        if all(
+            i.is_vector or i.is_matrix or isinstance(p, ast.List)
+            for i, p in zip(infos, parts, strict=True)
+        ):
+            return ir.Matrix(loc=loc, rows=[[part] for part in lifted])
+        ctx.decline("vstack of values of unknown dimensions")
+    if name == "py:call:np.column_stack":
+        columns: list[ir.Expr] = []
+        for info, part, value in zip(infos, parts, lifted, strict=True):
+            if info.is_matrix:
+                columns.append(value)
+            elif info.is_vector or isinstance(part, ast.List):
+                columns.append(ctx.transpose(value))
+            else:
+                ctx.decline("column_stack of a value of unknown dimensions")
+        return ir.Matrix(loc=loc, rows=[columns])
+    ctx.decline(f"{name}")

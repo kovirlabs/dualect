@@ -12,6 +12,7 @@ import ast
 
 from dualect import ir
 from dualect.emit import Context, Line
+from dualect.lift import LiftContext
 
 
 def translate(stmt: ir.While | ir.DoUntil | ir.Break | ir.Continue, ctx: Context) -> list[Line]:
@@ -38,3 +39,22 @@ def translate(stmt: ir.While | ir.DoUntil | ir.Break | ir.Continue, ctx: Context
         ctx.line(f"if {exit_test}:", extra=1),
         ctx.line("break", extra=2),
     ]
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# while / break / continue map directly; `while True:` is `while true`.
+
+
+def lift(stmt: ast.stmt, ctx: LiftContext) -> list[ir.Stmt]:
+    """``while``, ``break`` or ``continue``."""
+    loc = ctx.loc(stmt)
+    if isinstance(stmt, ast.Break):
+        return [ir.Break(loc=loc)]
+    if isinstance(stmt, ast.Continue):
+        return [ir.Continue(loc=loc)]
+    assert isinstance(stmt, ast.While)
+    cond = ctx.condition(stmt.test)
+    with ctx.loop():
+        body = ctx.block(stmt.body)
+    return [ir.While(loc=loc, cond=cond, body=body)]

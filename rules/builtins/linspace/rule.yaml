@@ -3,6 +3,10 @@ title: "`linspace` default count and edge cases"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:linspace]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.linspace
 octave: |
   x = linspace(0, 1, 5);
   y = linspace(0, 1);       % 100 points

@@ -3,6 +3,12 @@ title: "`zeros`, `ones`, `eye`"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:zeros, call:ones, call:eye]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.zeros
+    - py:call:np.ones
+    - py:call:np.eye
 octave: |
   Z = zeros(3);       % 3x3!
   W = ones(2, 4);

@@ -3,6 +3,12 @@ title: "`while` loops and Octave's `do ... until`"
 status: mechanical
 dialects: [octave, matlab]
 match: [stmt:while, stmt:do-until, stmt:break, stmt:continue]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:while
+    - py:break
+    - py:continue
 octave: |
   while err > tol
     ...

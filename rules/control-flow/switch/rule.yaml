@@ -3,6 +3,10 @@ title: "`switch` / `case` / `otherwise`"
 status: mechanical
 dialects: [octave, matlab]
 match: [stmt:switch]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:match
 octave: |
   switch method
     case 'linear'

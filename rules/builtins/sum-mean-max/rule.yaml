@@ -3,6 +3,39 @@ title: "`sum`, `mean`, `max`, `min`: dimensions and index outputs"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:sum, call:mean, call:max, call:min, call:prod]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:method:sum
+    - py:method:mean
+    - py:method:max
+    - py:method:min
+    - py:method:prod
+    - py:method:all
+    - py:method:any
+    - py:method:argmax
+    - py:method:argmin
+    - py:call:np.sum
+    - py:call:np.mean
+    - py:call:np.max
+    - py:call:np.min
+    - py:call:np.prod
+    - py:call:np.nanmax
+    - py:call:np.nanmin
+    - py:call:np.argmax
+    - py:call:np.argmin
+    - py:call:np.nanargmax
+    - py:call:np.nanargmin
+    - py:call:np.maximum
+    - py:call:np.minimum
+    - py:call:np.fmax
+    - py:call:np.fmin
+    - py:call:np.clip
+    - py:call:np.count_nonzero
+    - py:call:np.all
+    - py:call:np.any
+    - py:call:max
+    - py:call:min
 octave: |
   s = sum(A);           % down each column
   m = mean(A, 2);       % along each row

@@ -14,6 +14,7 @@ import ast
 
 from dualect import ir
 from dualect.emit import Context
+from dualect.lift import LiftContext
 
 
 def end_offset(node: ir.Expr) -> int | None:
@@ -52,3 +53,32 @@ def translate(node: ir.End, ctx: Context) -> ast.expr:
             value=ast.Attribute(value=target, attr="shape"), slice=ast.Constant(node.dim)
         )
     ctx.decline("end in a subscript of an array whose dimensions are unknown")
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# A negative Python index counts from the end: x[-1] is x(end), x[-k] is
+# x(end - k + 1), x[-1 - n] is x(end - n).
+
+
+def from_end(node: ast.expr, target: ir.Expr, dim: int, ndims: int, ctx: LiftContext) -> ir.Expr:
+    """The 1-based position of a negative Python index: ``end + 1 + index``, folded."""
+    end = ir.End(loc=ctx.loc(node), target=target, dim=dim, ndims=ndims)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = node.operand
+        if isinstance(inner, ast.Constant) and isinstance(inner.value, int):
+            return ctx.shift(end, 1 - inner.value)
+        return ctx.shift(ctx.binop("minus", end, ctx.expr(inner)), 1)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add | ast.Sub):
+        head = from_end(node.left, target, dim, ndims, ctx)
+        op = "plus" if isinstance(node.op, ast.Add) else "minus"
+        right = node.right
+        if isinstance(right, ast.Constant) and isinstance(right.value, int):
+            return ctx.shift(head, right.value if op == "plus" else -right.value)
+        return ctx.binop(op, head, ctx.expr(right))
+    ctx.decline("a negative index of this form")
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """Never reached directly: negative indices are part of a subscript."""
+    ctx.decline("a negative index outside a subscript")

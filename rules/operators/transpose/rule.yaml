@@ -3,6 +3,13 @@ title: "`'` (conjugate transpose) vs `.'` (transpose)"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:ctranspose, op:transpose]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:attr:T
+    - py:method:conj
+    - py:call:np.conj
+    - py:call:np.transpose
 octave: |
   Ah = A';            % conjugate transpose
   At = A.';           % plain transpose

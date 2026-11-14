@@ -21,6 +21,11 @@ RULE_FILE = "rule.yaml"
 TRANSLATOR_FILE = "translate.py"
 CASES_DIR = "cases"
 
+#: The two translation directions, as named in reports and the promotion check.
+TO_PYTHON = "to-python"
+FROM_PYTHON = "from-python"
+DIRECTIONS = (TO_PYTHON, FROM_PYTHON)
+
 
 class Status(StrEnum):
     """Lifecycle stage of a rule (docs/design.md section 4.3)."""
@@ -81,6 +86,35 @@ class Rule:
     def match(self) -> tuple[str, ...]:
         """Construct tags this rule covers (see :mod:`dualect.constructs`)."""
         return tuple(str(tag) for tag in self.data.get("match") or ())
+
+    @property
+    def python_status(self) -> Status | None:
+        """Lifecycle stage in the Python -> ``.m`` direction (``from_python.status``).
+
+        ``None`` when the rule says nothing about that direction. A rule may be
+        ``mechanical`` one way and ``guided`` the other.
+        """
+        block = self.data.get("from_python")
+        if not isinstance(block, dict):
+            return None
+        try:
+            return Status(str(block.get("status")))
+        except ValueError as exc:
+            raise RuleError(
+                f"{self.id}: unknown from_python status {block.get('status')!r}"
+            ) from exc
+
+    @property
+    def python_match(self) -> tuple[str, ...]:
+        """Python construct tags this rule covers (see :mod:`dualect.pyconstructs`)."""
+        block = self.data.get("from_python")
+        if not isinstance(block, dict):
+            return ()
+        return tuple(str(tag) for tag in block.get("match") or ())
+
+    def status_for(self, direction: str) -> Status | None:
+        """Status in a direction: ``"to-python"`` (``status``) or ``"from-python"``."""
+        return self.status if direction == TO_PYTHON else self.python_status
 
     @property
     def has_translator(self) -> bool:

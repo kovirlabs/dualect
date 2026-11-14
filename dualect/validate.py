@@ -9,6 +9,7 @@ folder, cases come in pairs, the status agrees with the files present, and
 ``related`` ids point at rules that exist.
 """
 
+import ast
 import functools
 import json
 from pathlib import Path
@@ -19,6 +20,7 @@ from jsonschema import Draft202012Validator
 from dualect.constructs import is_known_tag
 from dualect.errors import RuleError
 from dualect.paths import schema_path
+from dualect.pyconstructs import is_known_py_tag
 from dualect.rulebook import (
     CASES_DIR,
     TRANSLATOR_FILE,
@@ -81,6 +83,17 @@ def validate_rule_dir(*, rule_dir: Path) -> list[str]:
         if isinstance(tag, str) and not is_known_tag(tag):
             problems.append(f"match: unknown construct tag {tag!r} (see dualect/constructs.py)")
 
+    from_python = data.get("from_python")
+    if isinstance(from_python, dict):
+        for tag in from_python.get("match") or []:
+            if isinstance(tag, str) and not is_known_py_tag(tag):
+                problems.append(
+                    f"from_python.match: unknown construct tag {tag!r} "
+                    "(see dualect/pyconstructs.py)"
+                )
+        if from_python.get("status") == Status.MECHANICAL and not _defines_lift(rule_dir):
+            problems.append("from_python status 'mechanical' needs lift() in translate.py")
+
     status = data.get("status")
     has_cases = bool(find_cases(rule_dir=rule_dir))
     if status in (Status.GUIDED, Status.MECHANICAL) and not has_cases:
@@ -89,6 +102,15 @@ def validate_rule_dir(*, rule_dir: Path) -> list[str]:
         problems.append(f"status 'mechanical' needs a {TRANSLATOR_FILE}")
 
     return [f"{expected_id}: {problem}" for problem in problems]
+
+
+def _defines_lift(rule_dir: Path) -> bool:
+    """Whether the rule's ``translate.py`` defines a top-level ``lift`` function."""
+    path = rule_dir / TRANSLATOR_FILE
+    if not path.is_file():
+        return False
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return any(isinstance(node, ast.FunctionDef) and node.name == "lift" for node in tree.body)
 
 
 def validate_all(*, rules_dir: Path) -> list[str]:
@@ -127,10 +149,13 @@ def _claim_tags(*, rule_dir: Path, rule_id: str, owners: dict[str, str]) -> list
         data = read_rule_yaml(path=rule_dir / "rule.yaml")
     except RuleError:
         return []
-    if data.get("since") or data.get("until"):
-        return []
     problems = []
-    for tag in data.get("match") or []:
+    # Python tags are not filtered by source dialect: they may never be shared.
+    block = data.get("from_python")
+    tags = list(block.get("match") or []) if isinstance(block, dict) else []
+    if not (data.get("since") or data.get("until")):
+        tags = list(data.get("match") or []) + tags
+    for tag in tags:
         other = owners.setdefault(str(tag), rule_id)
         if other != rule_id:
             problems.append(f"{rule_id}: tag {tag!r} is already matched by {other}")

@@ -17,6 +17,7 @@ import ast
 from dualect import ir
 from dualect.emit import Context, Line, offset
 from dualect.infer import Kind
+from dualect.lift import LiftContext
 
 
 def _range(stmt: ir.For, it: ir.Range, ctx: Context) -> ast.expr | None:
@@ -75,3 +76,88 @@ def translate(stmt: ir.For, ctx: Context) -> list[Line]:
     with ctx.loop(stmt):
         lines.extend(ctx.block(stmt.body))
     return lines
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# for k in range(a, b) is for k = a:b-1 (the values stay 0-based, as in
+# Python). for x in v (1-D) takes each element: for x = v. A 2-D array yields
+# its rows in Python but a .m loop takes columns, and a 1-D row is a row on
+# the .m side: for c in A.T is for c = A with c = c.' first in the body, and
+# for r in A is for r = A.' likewise. A list of arrays, for x in [v, w], loops
+# over the cell {v, w} with x = x{1} first. Writing into such a row would write into
+# A in NumPy (it is a view), which is declined. An empty range is declined:
+# Python leaves the variable unbound, the .m side makes it an empty array.
+
+
+def lift(stmt: ast.stmt, ctx: LiftContext) -> list[ir.Stmt]:
+    """One ``for`` loop (``range`` anywhere else is declined)."""
+    if not isinstance(stmt, ast.For):
+        ctx.decline("range() outside a for loop")
+    loc = ctx.loc(stmt)
+    target = stmt.target
+    if not isinstance(target, ast.Name):
+        ctx.decline("unpacking in a for loop")
+    var = ir.Name(loc=ctx.loc(target), id=target.id)
+    it = stmt.iter
+    prologue: list[ir.Stmt] = []
+    iterable: ir.Expr
+    if isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id == "range":
+        iterable = _lift_range(it, ctx)
+    else:
+        info = ctx.info(it)
+        rows_of: ast.expr | None = None
+        if isinstance(it, ast.Attribute) and it.attr == "T" and ctx.info(it.value).is_matrix:
+            rows_of = it.value  # rows of A.T: the columns of A
+            iterable = ctx.expr(rows_of)
+        elif info.is_matrix:
+            rows_of = it
+            iterable = ctx.transpose(ctx.expr(it))
+        elif info.is_vector or (
+            isinstance(it, ast.List) and all(ctx.info(e).is_scalar for e in it.elts)
+        ):
+            iterable = ctx.module_for("syntax/array-literals").lift_items(it, ctx)
+        elif isinstance(it, ast.List) and it.elts and all(ctx.info(e).is_array for e in it.elts):
+            # A list of arrays: loop over a cell, one array per pass.
+            if target.id in ctx.scope.mutated:
+                ctx.decline(f"writing into {target.id}, which shares memory with a list item")
+            iterable = ir.CellLit(loc=ctx.loc(it), items=[ctx.expr(e) for e in it.elts])
+            unwrap = ir.Index(loc=loc, target=var, args=[ctx.num(1)])
+            prologue.append(ir.Assign(loc=loc, targets=[var], value=_cell_item(unwrap)))
+        else:
+            ctx.decline("a loop over a value that is not a range or a known array")
+        if rows_of is not None:
+            if target.id in ctx.scope.mutated:
+                ctx.decline(f"writing into {target.id}, a view of the array being looped over")
+            prologue.append(ir.Assign(loc=loc, targets=[var], value=ctx.transpose(var)))
+    with ctx.loop():
+        body = prologue + ctx.block(stmt.body)
+    return [ir.For(loc=loc, var=var, iterable=iterable, body=body)]
+
+
+def _lift_range(call: ast.Call, ctx: LiftContext) -> ir.Expr:
+    """``range(...)`` as the ``.m`` range of the same values."""
+    loc = ctx.loc(call)
+    args = call.args
+    if call.keywords or not 1 <= len(args) <= 3:
+        ctx.decline("range with these arguments")
+    ranges = ctx.module_for("indexing/ranges")
+    step = ranges._step(args[2] if len(args) == 3 else None, ctx)
+    start = ctx.num(0) if len(args) == 1 else ctx.expr(args[0])
+    stop_node = args[0] if len(args) == 1 else args[1]
+    stop = ctx.shift(ctx.expr(stop_node), -1 if step > 0 else 1)
+    values = [ctx.info(a).value for a in args]
+    if all(isinstance(v, int) for v in values):
+        count = len(range(*values))  # type: ignore[arg-type]
+        if count == 0:
+            ctx.decline("a loop over an empty range (the loop variable would differ)")
+    if step == 1:
+        return ir.Range(loc=loc, start=start, stop=stop)
+    return ir.Range(loc=loc, start=start, stop=stop, step=ctx.num(step))
+
+
+def _cell_item(index: ir.Index) -> ir.Expr:
+    """``c{1}``: the IR has no brace index, so it is carried as verbatim ``.m`` text."""
+    target = index.target
+    assert isinstance(target, ir.Name)
+    return ir.Opaque(loc=index.loc, construct="expr:cell-index", text=f"{target.id}{{1}}")

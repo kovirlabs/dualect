@@ -23,7 +23,7 @@ from dualect.errors import RuleError
 from dualect.infer import Analysis, analyze
 from dualect.lower import lower_parsed
 from dualect.parse import parse_m
-from dualect.rulebook import Rule, Status
+from dualect.rulebook import FROM_PYTHON, TO_PYTHON, Rule, Status
 from dualect.source import OctaveFeature
 
 #: Tag for Octave-only syntax found while scanning for the matlab dialect.
@@ -74,17 +74,21 @@ class Finding:
     :param loc: where it is.
     :param rule: the rule covering it, or ``None`` when no rule does.
     :param text: a short source excerpt, for reports.
+    :param direction: ``to-python`` (a ``.m`` construct) or ``from-python``.
     """
 
     tag: str
     loc: ir.Loc
     rule: Rule | None
     text: str = ""
+    direction: str = TO_PYTHON
 
     @property
     def status(self) -> Status:
-        """The rule's status; ``unsupported`` when there is no rule."""
-        return self.rule.status if self.rule is not None else Status.UNSUPPORTED
+        """The rule's status in this direction; ``unsupported`` when there is none."""
+        if self.rule is None:
+            return Status.UNSUPPORTED
+        return self.rule.status_for(self.direction) or Status.UNSUPPORTED
 
     @property
     def unsupported(self) -> bool:
@@ -103,6 +107,7 @@ class ScanResult:
     :param uses_by_stmt: ``id(stmt)`` -> the findings of that statement itself.
     :param features: Octave-only syntax found by the normalizer.
     :param program_text: the source text.
+    :param direction: ``to-python`` for a ``.m`` file, ``from-python`` for a ``.py`` file.
     """
 
     source_name: str
@@ -112,6 +117,11 @@ class ScanResult:
     findings: list[Finding] = field(default_factory=list)
     uses_by_stmt: dict[int, list[Finding]] = field(default_factory=dict)
     features: list[OctaveFeature] = field(default_factory=list)
+    direction: str = TO_PYTHON
+
+    def status_of(self, rule: Rule) -> Status:
+        """A rule's status in this scan's direction."""
+        return rule.status_for(self.direction) or Status.UNSUPPORTED
 
     def needed_rules(self) -> list[Rule]:
         """The rules this file needs, sorted by id."""
@@ -132,7 +142,7 @@ class ScanResult:
             shown = ", ".join(_unique(locs)[:8])
             more = len(_unique(locs)) - 8
             suffix = f" (+{more} more)" if more > 0 else ""
-            lines.append(f"  {rule.id:<{width}}  {rule.status.value:<11} {shown}{suffix}")
+            lines.append(f"  {rule.id:<{width}}  {self.status_of(rule).value:<11} {shown}{suffix}")
         gaps = self.unsupported()
         if gaps:
             lines.append(f"unsupported ({len(gaps)}):")
@@ -142,7 +152,7 @@ class ScanResult:
                 lines.append(f"  {str(finding.loc):<7} {finding.tag}  ({label}){excerpt}")
         counts = {status: 0 for status in Status}
         for rule in rules:
-            counts[rule.status] += 1
+            counts[self.status_of(rule)] += 1
         lines.append(
             f"{len(rules)} rules: {counts[Status.MECHANICAL]} mechanical, "
             f"{counts[Status.GUIDED]} guided, {counts[Status.UNSUPPORTED]} unsupported; "
@@ -154,10 +164,11 @@ class ScanResult:
         """Machine-readable form (for tools and, later, the MCP server)."""
         return {
             "source": self.source_name,
+            "direction": self.direction,
             "rules": [
                 {
                     "id": rule.id,
-                    "status": rule.status.value,
+                    "status": self.status_of(rule).value,
                     "locations": _unique(str(f.loc) for f in self.findings if f.rule is rule),
                 }
                 for rule in self.needed_rules()
@@ -234,14 +245,38 @@ def scan_text(*, text: str, name: str, index: RuleIndex) -> ScanResult:
     return result
 
 
+def scan_python_text(*, text: str, name: str, rules: list[Rule]) -> ScanResult:
+    """Scan Python source: the rules it needs to become ``.m`` code, and the gaps.
+
+    :param text: the source.
+    :param name: file name for reports.
+    :param rules: all loaded rules.
+    :raises DualectError: when the text is not valid Python.
+    """
+    from dualect.lift import plan_python  # deferred: lift imports this module
+
+    findings = plan_python(text=text, name=name, rules=rules)
+    result = ScanResult(
+        source_name=name,
+        program=ir.Program(loc=ir.NO_LOC, body=[], source_name=name),
+        analysis=Analysis(),
+        program_text=text,
+        direction=FROM_PYTHON,
+    )
+    result.findings = sorted(findings, key=lambda f: (f.loc.line, f.loc.col))
+    return result
+
+
 def scan_file(*, path: Path, rules: list[Rule], dialect: Dialect) -> ScanResult:
-    """Scan a ``.m`` file.
+    """Scan a ``.m`` file, or a ``.py`` file for the other direction.
 
     :param path: the file.
     :param rules: all loaded rules.
-    :param dialect: the source dialect.
+    :param dialect: the source dialect (of a ``.m`` file).
     """
     text = path.read_text(encoding="utf-8")
+    if path.suffix == ".py":
+        return scan_python_text(text=text, name=str(path), rules=rules)
     return scan_text(text=text, name=str(path), index=RuleIndex(rules=rules, dialect=dialect))
 
 

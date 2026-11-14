@@ -3,6 +3,11 @@ title: "`^` (matrix power) vs `.^` (element-wise power)"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:mpower, op:power]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:pow
+    - py:call:np.linalg.matrix_power
 octave: |
   P = A ^ 2;          % A * A
   Q = A .^ 2;         % element-wise

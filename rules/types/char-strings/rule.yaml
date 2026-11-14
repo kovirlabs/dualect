@@ -3,6 +3,10 @@ title: "Char arrays `'...'` and double-quoted strings"
 status: mechanical
 dialects: [octave, matlab]
 match: [literal:string, literal:dq-string, expr:string-concat, call:strcmp]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:str
 octave: |
   name = 'beam';
   label = ['span of ', name];

@@ -3,6 +3,11 @@ title: "Multiple return values and `nargout`"
 status: guided
 dialects: [octave, matlab]
 match: [func:multi-output, func:nargout, assign:multi, assign:ignore-output]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:assign-multi
+    - py:return-multi
 octave: |
   function [s, p] = sum_prod(x)
     s = sum(x);

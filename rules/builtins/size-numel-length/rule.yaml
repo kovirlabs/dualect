@@ -3,6 +3,13 @@ title: "`size`, `numel`, `length`"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:size, call:numel, call:length]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:attr:size
+    - py:attr:shape
+    - py:call:len
+    - py:call:np.size
 octave: |
   [r, c] = size(A);
   r = size(A, 1);

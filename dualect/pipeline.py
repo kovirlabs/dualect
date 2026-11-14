@@ -3,8 +3,11 @@
 
 """``dualect translate``: the whole pipeline of docs/design.md section 5.
 
-parse -> scan -> plan -> translate -> emit -> verify -> report. Planning and
-translation happen statement by statement in :mod:`dualect.emit`; this module
+parse -> scan -> plan -> translate -> emit -> verify -> report, in either
+direction: a ``.m`` source becomes Python (planning and translation statement
+by statement in :mod:`dualect.emit`), a ``.py`` source becomes ``.m`` code
+(lifted into the IR by :mod:`dualect.lift`, printed by :mod:`dualect.memit`).
+This module
 assembles the file (header, imports, ruff formatting), writes it, verifies it
 against the source by execution, and reports every statement with the rules
 it needed, the status used and whether the result was verified.
@@ -14,19 +17,22 @@ verified; untranslated statements are holes that raise ``NotImplementedError``;
 an unverified file is labelled UNVERIFIED with the reason.
 """
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from dualect import memit
 from dualect.compare import Tolerance
 from dualect.dialect import Dialect
 from dualect.emit import Context, StmtReport, render
 from dualect.errors import DualectError, ExecutionError, RuntimeMissingError
+from dualect.lift import lift_python
 from dualect.pyformat import format_python
-from dualect.rulebook import Rule, Status
+from dualect.rulebook import FROM_PYTHON, TO_PYTHON, Rule, Status
 from dualect.runners import MRunner
-from dualect.scan import RuleIndex, ScanResult, scan_text
+from dualect.scan import RuleIndex, ScanResult, scan_python_text, scan_text
 from dualect.translators import TranslatorSet
-from dualect.verify import VerifyResult, options_for_pair, verify_pair
+from dualect.verify import VerifyResult, options_for_pair, parse_directives, verify_pair
 
 UNVERIFIED = "UNVERIFIED"
 
@@ -45,6 +51,8 @@ class Translation:
     :param scan: the scan the translation was planned from.
     :param verify: the verification result, when verification ran.
     :param verify_note: why verification did not run, or how it failed.
+    :param rules_used: the rules the file needed.
+    :param direction: ``to-python`` (``.m`` source) or ``from-python`` (``.py`` source).
     """
 
     source_name: str
@@ -54,6 +62,17 @@ class Translation:
     verify: VerifyResult | None = None
     verify_note: str = ""
     rules_used: list[Rule] = field(default_factory=list)
+    direction: str = TO_PYTHON
+
+    @property
+    def comment(self) -> str:
+        """The comment marker of the output language."""
+        return "#" if self.direction == TO_PYTHON else "%"
+
+    @property
+    def source_kind(self) -> str:
+        """The source language's file suffix."""
+        return ".m" if self.direction == TO_PYTHON else ".py"
 
     @property
     def holes(self) -> list[StmtReport]:
@@ -73,10 +92,14 @@ class Translation:
     def header(self) -> str:
         """The first line of the output file: what this file is and whether it was checked."""
         name = Path(self.source_name).name
+        mark = self.comment
         if self.verified:
-            return f"# Translated from {name} by dualect; verified against the .m source."
+            return (
+                f"{mark} Translated from {name} by dualect; "
+                f"verified against the {self.source_kind} source."
+            )
         reason = self.verify_note or "not verified"
-        return f"# Translated from {name} by dualect. {UNVERIFIED}: {reason}."
+        return f"{mark} Translated from {name} by dualect. {UNVERIFIED}: {reason}."
 
     def text(self) -> str:
         """The complete output file."""
@@ -166,6 +189,35 @@ def translate_text(
     return result
 
 
+def translate_python_text(
+    *, text: str, name: str, rules: list[Rule], strict: bool = False
+) -> Translation:
+    """Lift and print Python source as ``.m`` code (no verification).
+
+    :param text: the source.
+    :param name: its file name, for reports.
+    :param rules: all loaded rules.
+    :param strict: raise :class:`StrictModeError` instead of leaving holes.
+    """
+    translators = TranslatorSet(rules=rules)
+    lifted = lift_python(text=text, name=name, rules=rules, translator_for=translators.get)
+    scan = scan_python_text(text=text, name=name, rules=rules)
+    result = Translation(
+        source_name=name,
+        code=memit.program(lifted.body),
+        statements=lifted.reports,
+        scan=scan,
+        rules_used=scan.needed_rules(),
+        direction=FROM_PYTHON,
+    )
+    if strict and not result.complete:
+        raise StrictModeError(
+            f"--strict: {len(result.holes)} statement(s) need guided or unsupported "
+            f"translation\n{result.report()}"
+        )
+    return result
+
+
 def tolerance_for(rules: list[Rule]) -> Tolerance:
     """The loosest per-rule tolerance among the rules used (or the default)."""
     tolerance = Tolerance()
@@ -189,11 +241,23 @@ def verify_translation(
     if not result.complete:
         result.verify_note = f"{len(result.holes)} statement(s) not translated"
         return
-    options = options_for_pair(
-        m_path=source, py_path=output, tolerance=tolerance_for(result.rules_used)
-    )
+    if result.direction == TO_PYTHON:
+        m_path, py_path = source, output
+        options = options_for_pair(
+            m_path=m_path, py_path=py_path, tolerance=tolerance_for(result.rules_used)
+        )
+    else:
+        m_path, py_path = output, source
+        # The source's own `index` directives describe its pairing with some
+        # other .m file; the generated .m keeps Python's values, so only its
+        # own directives (and either side's `ignore`) apply.
+        generated = options_for_pair(
+            m_path=m_path, py_path=m_path, tolerance=tolerance_for(result.rules_used)
+        )
+        _index, ignored = parse_directives(text=source.read_text(encoding="utf-8"), path=source)
+        options = dataclasses.replace(generated, ignore=generated.ignore | ignored)
     try:
-        result.verify = verify_pair(m_path=source, py_path=output, options=options, runner=runner)
+        result.verify = verify_pair(m_path=m_path, py_path=py_path, options=options, runner=runner)
     except RuntimeMissingError as exc:
         result.verify_note = f"cannot run the .m side ({exc})"
         return
@@ -201,7 +265,7 @@ def verify_translation(
         result.verify_note = f"execution failed: {exc}"
         return
     if not result.verify.ok:
-        result.verify_note = "outputs differ from the .m source"
+        result.verify_note = f"outputs differ from the {result.source_kind} source"
 
 
 def translate_file(
@@ -216,18 +280,21 @@ def translate_file(
 ) -> Translation:
     """The full pipeline for one file: translate, write, verify, rewrite the header.
 
-    :param source: the ``.m`` file.
-    :param output: where to write the ``.py``.
+    :param source: the ``.m`` file (or a ``.py`` file, for the other direction).
+    :param output: where to write the ``.py`` (or the ``.m``).
     :param rules: all loaded rules.
-    :param dialect: the source dialect.
+    :param dialect: the source dialect (of a ``.m`` source).
     :param strict: stop (raise, write nothing) unless every statement is mechanical.
     :param verify: run both sides and compare (needs Octave).
     :param runner: an Octave session to reuse.
     """
     text = source.read_text(encoding="utf-8")
-    result = translate_text(
-        text=text, name=str(source), rules=rules, dialect=dialect, strict=strict
-    )
+    if source.suffix == ".py":
+        result = translate_python_text(text=text, name=str(source), rules=rules, strict=strict)
+    else:
+        result = translate_text(
+            text=text, name=str(source), rules=rules, dialect=dialect, strict=strict
+        )
     if not verify:
         result.verify_note = "verification was not requested"
     output.write_text(result.text(), encoding="utf-8")

@@ -3,6 +3,10 @@ title: "`end` inside an index expression"
 status: mechanical
 dialects: [octave, matlab]
 match: [index:end]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:index:negative
 octave: |
   last = x(end);
   tail = x(end-2:end);

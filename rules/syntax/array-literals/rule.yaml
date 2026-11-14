@@ -3,6 +3,15 @@ title: "Bracket literals: rows, columns, matrices, `[]` and concatenation"
 status: mechanical
 dialects: [octave, matlab]
 match: [literal:matrix, literal:empty, expr:concat]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.array
+    - py:list
+    - py:tuple
+    - py:call:np.concatenate
+    - py:call:np.vstack
+    - py:call:np.column_stack
 octave: |
   v = [1 2 3];        % 1x3 row
   c = [1; 2; 3];      % 3x1 column

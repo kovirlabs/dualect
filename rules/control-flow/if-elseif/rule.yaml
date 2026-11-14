@@ -3,6 +3,10 @@ title: "`if` / `elseif` / `else` and array conditions"
 status: mechanical
 dialects: [octave, matlab]
 match: [stmt:if]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:if
 octave: |
   if x > 0
     s = 1;

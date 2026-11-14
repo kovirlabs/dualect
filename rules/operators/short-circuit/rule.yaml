@@ -3,6 +3,16 @@ title: "`&&`/`||` (short-circuit) vs `&`/`|` (element-wise)"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:andand, op:oror, op:and, op:or, call:xor]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:boolop:and
+    - py:boolop:or
+    - py:op:bitand
+    - py:op:bitor
+    - py:call:np.logical_and
+    - py:call:np.logical_or
+    - py:call:np.logical_xor
 octave: |
   if n > 0 && x(n) > 1, ... end
   ok = a > 0 | b > 0;     % element-wise

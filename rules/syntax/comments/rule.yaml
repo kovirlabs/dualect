@@ -3,6 +3,10 @@ title: "Comments: `%`, `#`, and `%{ ... %}` blocks"
 status: mechanical
 dialects: [octave, matlab]
 match: [syntax:comment, syntax:hash-comment, syntax:block-comment]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:comment
 octave: |
   x = 1;  % trailing comment
   # line comment (Octave only)

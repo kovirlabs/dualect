@@ -3,6 +3,10 @@ title: "`x += e`, `x++` and friends (Octave only)"
 status: mechanical
 dialects: [octave]
 match: [op:augassign]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:augassign
 octave: |
   n++;
   k += 2;

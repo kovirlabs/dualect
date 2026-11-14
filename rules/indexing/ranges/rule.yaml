@@ -3,6 +3,11 @@ title: "Colon ranges `a:b` and `a:step:b`"
 status: mechanical
 dialects: [octave, matlab]
 match: [expr:range]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:index:slice
+    - py:call:np.arange
 octave: |
   r = 1:5;
   s = 0:0.25:1;

@@ -3,6 +3,11 @@ title: "`find`: 1-based, column-major indices"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:find]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:call:np.flatnonzero
+    - py:call:np.nonzero
 octave: |
   idx = find(x > 2);          % 1-based
   first = find(x > 2, 1);

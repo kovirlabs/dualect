@@ -14,6 +14,7 @@ import ast
 from dualect import ir
 from dualect.emit import Context, offset
 from dualect.infer import range_count
+from dualect.lift import LiftContext
 
 
 def literal_int(node: ir.Expr | None) -> int | None:
@@ -95,3 +96,78 @@ def to_slice(node: ir.Range, ctx: Context) -> ast.expr:
         upper=upper,
         step=None if step == 1 else ctx.const(step),
     )
+
+
+# --- Python -> .m ------------------------------------------------------------
+#
+# np.arange(a, b) stops before b: a:b-1 (with a step s > 0, a:s:b-1; s < 0,
+# a:s:b+1). np.arange with a float step can gain or lose its end point, so only
+# integer arguments are translated. A slice x[a:b] is x(a+1:b): the 0-based
+# start rises by one and the exclusive 0-based stop is the inclusive 1-based
+# one. A missing stop is `end`; negative bounds count from the end.
+
+
+def _step(node: ast.expr | None, ctx: LiftContext) -> int:
+    if node is None:
+        return 1
+    value = node.value if isinstance(node, ast.Constant) else None
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = node.operand
+        value = (
+            -inner.value if isinstance(inner, ast.Constant) and type(inner.value) is int else None
+        )
+    if type(value) is not int or value == 0:
+        ctx.decline("a step that is not a non-zero integer literal")
+    return value
+
+
+def lift(node: ast.expr, ctx: LiftContext) -> ir.Expr:
+    """``np.arange`` with integer arguments."""
+    assert isinstance(node, ast.Call)
+    loc = ctx.loc(node)
+    args = node.args
+    if node.keywords or not 1 <= len(args) <= 3:
+        ctx.decline("np.arange with these arguments")
+    if not all(ctx.info(a).dtype.value == "int" for a in args):
+        ctx.decline("np.arange with arguments not known to be integers")
+    if len(args) == 1:
+        start: ir.Expr = ctx.num(0)
+        stop_node = args[0]
+    else:
+        start = ctx.expr(args[0])
+        stop_node = args[1]
+    step = _step(args[2] if len(args) == 3 else None, ctx)
+    stop = ctx.shift(ctx.expr(stop_node), -1 if step > 0 else 1)
+    if step == 1:
+        return ir.Range(loc=loc, start=start, stop=stop)
+    return ir.Range(loc=loc, start=start, stop=stop, step=ctx.num(step))
+
+
+def slice_range(
+    part: ast.Slice, target: ir.Expr, dim: int, ndims: int, ctx: LiftContext
+) -> ir.Expr:
+    """A Python slice as the ``.m`` range of the same positions."""
+    loc = ctx.loc(part)
+    step = _step(part.step, ctx)
+    one_based = ctx.module_for("indexing/one-based")
+    ends = ctx.module_for("indexing/end-in-index")
+
+    def bound(node: ast.expr, adjust: int) -> ir.Expr:
+        """A 0-based (possibly negative) bound plus ``adjust``, as a 1-based value."""
+        if one_based._negative(node):
+            return ctx.shift(ends.from_end(node, target, dim, ndims, ctx), adjust - 1)
+        info = ctx.info(node)
+        if not info.nonneg:
+            ctx.assume(f"non-negative slice bound {ast.unparse(node)}")
+        return ctx.shift(ctx.expr(node), adjust)
+
+    end = ir.End(loc=loc, target=target, dim=dim, ndims=ndims)
+    if step > 0:
+        start = ctx.num(1) if part.lower is None else bound(part.lower, 1)
+        stop = end if part.upper is None else bound(part.upper, 0)
+    else:
+        start = end if part.lower is None else bound(part.lower, 1)
+        stop = ctx.num(1) if part.upper is None else bound(part.upper, 2)
+    if step == 1:
+        return ir.Range(loc=loc, start=start, stop=stop)
+    return ir.Range(loc=loc, start=start, stop=stop, step=ctx.num(step))

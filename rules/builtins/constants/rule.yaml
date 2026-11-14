@@ -3,6 +3,16 @@ title: "Constants: `pi`, `Inf`, `NaN`, `eps`, `true`, `false`, `i`"
 status: mechanical
 dialects: [octave, matlab]
 match: [call:pi, call:e, call:Inf, call:inf, call:NaN, call:nan, call:eps, call:true, call:false, call:i, call:j]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:const:np.pi
+    - py:const:np.e
+    - py:const:np.inf
+    - py:const:np.nan
+    - py:call:np.finfo
+    - py:attr:eps
+    - py:complex
 octave: |
   c = 2 * pi * r;
   m = NaN;

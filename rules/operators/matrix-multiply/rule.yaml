@@ -3,6 +3,12 @@ title: "`*` (matrix product) vs `.*` (element-wise)"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:mtimes, op:times]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:mult
+    - py:op:matmult
+    - py:call:np.outer
 octave: |
   C = A * B;          % matrix product
   D = A .* B;         % element-wise

@@ -3,6 +3,13 @@ title: "`~=` / `!=` and logical NOT `~` / `!`"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:ne, op:not]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:cmp:noteq
+    - py:op:not
+    - py:op:invert
+    - py:call:np.logical_not
 octave: |
   d = a ~= b;
   d = a != b;         % Octave only

@@ -3,6 +3,11 @@ title: "Printing: missing `;`, `disp`, `printf` / `fprintf`"
 status: guided
 dialects: [octave, matlab]
 match: [syntax:display, call:disp, call:display, call:printf, call:fprintf]
+from_python:                  # the Python -> .m direction
+  status: guided
+  match:
+    - py:call:print
+    - py:fstring
 octave: |
   x = 3               % no semicolon: prints "x = 3"
   disp(x)

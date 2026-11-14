@@ -3,6 +3,13 @@ title: "Optional arguments with `nargin`"
 status: guided
 dialects: [octave, matlab]
 match: [func:nargin]
+from_python:                  # the Python -> .m direction
+  status: guided
+  match:
+    - py:def-default
+    - py:none
+    - py:cmp:is
+    - py:cmp:isnot
 octave: |
   function y = scale(x, factor)
     if nargin < 2

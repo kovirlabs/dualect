@@ -277,6 +277,60 @@ join of the argument facts at its call sites in the file.
   case are both printed back with `ast.unparse`, which removes formatting and
   comments; case comments are teaching notes, not code.
 
+### 5.5 Python -> `.m` (settled in milestone 5)
+
+- **One rule folder, two directions.** A rule covers Python constructs under
+  `from_python: {status, match}` in its `rule.yaml`, next to the `.m` tags in
+  `match`; its `translate.py` adds `lift(node, ctx)` (and `lift_store`,
+  `lift_multi`, `lift_assign` where needed) beside `translate`. Status is
+  tracked per direction: `status` is `.m` -> Python, `from_python.status` is
+  Python -> `.m`, and a rule may be `mechanical` one way and `guided` the
+  other. Python construct tags are `py:`-prefixed (`py:op:matmult`,
+  `py:call:np.zeros`, `py:method:sum`, `py:subscript`, `py:for`, ...; the
+  vocabulary is `dualect/pyconstructs.py`); a tag no rule claims is reported
+  as unsupported by name (`py:call:np.fft.fft`, `py:stmt:try`,
+  `py:import:scipy`).
+- **Pipeline.** `dualect/pyinfer.py` infers facts over the Python `ast`
+  (1-D vs 2-D, dtype, NaN-free, non-negative, may-be-a-view), because lifting
+  depends on them. `dualect/lift.py` plans each statement exactly like the
+  other direction (every construct must be `mechanical` from Python, else a
+  hole: a `TODO(dualect)` comment and an `error(...)` call), and rules lift
+  Python nodes into the shared IR, which already has `.m` semantics (1-based
+  `Index`, inclusive `Range`, `mtimes`). `dualect/memit.py` only prints it:
+  precedence, layout, comments, `1;` before functions, commas between matrix
+  elements. `translate`, `scan` and `context` pick the direction from the
+  suffix of the source file.
+- **Representation.** A 1-D NumPy array is a `1xN` row on the `.m` side. So
+  `A @ v` is `(A * v.').'`, `u @ v` is `u * v.'`, `np.outer(u, v)` is
+  `u.' * v`, `A[:, j]` is `A(:, j+1).'`, `A.sum(axis=1)` is `sum(A, 2).'`,
+  `for c in A.T` is `for c = A` with `c = c.'` first in the body.
+- **Values stay Python's.** Indices are shifted where they are *used*
+  (`x[i]` is `x(i + 1)`), so every variable holds the same value on both
+  sides and verification needs no `index` directives; positions a function
+  returns stay 0-based (`i = np.argmax(v)` is `[~, i] = max(v); i = i - 1`).
+  The source's own `dualect:` directives are never copied; verifying a
+  `.py` -> `.m` translation uses only the generated file's directives.
+- **Never silently wrong, from Python.** Declined (a guided hole), because
+  the `.m` side has no counterpart: writing through a NumPy alias or view
+  (`y = x; y[0] = 1`); a `def` writing into an array argument without copying
+  it first; a `def` reading a module-level variable; a lambda whose free
+  variable changes after it is created (Python binds late, a handle captures);
+  a variable that would hide a function the translation calls (`max = 3`);
+  storing fractions into an integer array or numbers into a boolean array
+  (NumPy truncates or converts); arithmetic on two boolean arrays (NumPy's
+  `bool + bool` is OR); `max`/`argmax`/`np.maximum`/`np.clip` of data that
+  may hold NaN (NumPy propagates it, the `.m` side skips it); `np.round` of
+  fractions (halves to even); `np.linspace(a, b, 1)`; `and`/`or` whose value
+  (an operand) is used outside a condition; `~` on integers (bitwise);
+  2-D masks (row vs column order); a function that returns on some paths
+  only. Assumed out loud (`% dualect: assumed ...`) and left to verification:
+  a variable index or slice bound not known to be non-negative (it would count
+  from the end in Python), `sqrt`/`log`/fractional powers of data not known to
+  be non-negative (NaN vs complex), unknown divisors of `%`, `//`, `np.mod`.
+- **Verification** runs the original `.py` and the generated `.m` and
+  compares them as in section 12.1; the output's first line states the
+  verdict (`% ... verified against the .py source` or `UNVERIFIED: ...`).
+
 ## 6. LLM integration
 
 The repo is the LLM's memory: models do not retain anything between tasks, so the
@@ -379,11 +433,17 @@ good seed for `builtins/*` rules (link, don't copy).
    (`tests/test_corpus.py`): `ode_rk4.m` translates completely and verifies;
    `beam_deflection.m` is 29/30 (its `fprintf` is guided) and
    `signal_filter.m` 29/33 (`filter` has no rule; two statements depend on it).
-5. **Python → Octave** for the same subset via the shared IR. The IR is ready
-   for it: index base, linear order and range inclusivity are fields, and
-   operators carry semantic names (`mtimes` vs `times`). What remains is a
-   Python `ast` lowering, an `.m` emitter, and a second translator entry point
-   per rule (the `translate.py` interface is per direction).
+5. **Python → Octave** for the same subset via the shared IR (done: section
+   5.5). Of the 35 rules, 29 are `mechanical` from Python (every `.py` case
+   translates completely and verifies against its `.py` source; this includes
+   `functions/multiple-returns`, still `guided` to Python), 3 are `guided`
+   (`functions/nargin`, `indexing/grow-on-assign`, `io/display`) and 3 claim
+   no Python construct (`builtins/isempty`, `syntax/line-continuation`,
+   `syntax/command-syntax`). The corpus runs in
+   reverse (`tests/test_reverse.py`): `ode_rk4` round-trips `.m` -> `.py` ->
+   `.m` completely and verifies; the other two carry the holes of their
+   forward translation. Before it, adversarial probes hardened the `.m` ->
+   Python direction (section 5.4).
 6. **MCP server**, promotion-loop tooling, `llms.txt`.
 
 ## 12. Decisions

@@ -3,6 +3,12 @@ title: "`/`, `./` and `\\`: true division and linear solves"
 status: mechanical
 dialects: [octave, matlab]
 match: [op:mrdivide, op:rdivide, op:mldivide, op:ldivide]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:op:div
+    - py:op:floordiv
+    - py:call:np.linalg.solve
 octave: |
   h = v / 2;          % by a scalar
   r = 1 ./ v;         % element-wise
