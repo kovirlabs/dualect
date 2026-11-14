@@ -11,7 +11,10 @@
     dualect translate script.py -o out.m [--strict]   # the other direction
     dualect verify script.m script.py      # run both, compare
     dualect rules list [--status guided] [--direction from-python]
+    dualect rules check [RULE_ID ...] [--direction from-python] [--no-verify]
     dualect rules new indexing/foo
+    dualect llms-txt [-o llms.txt]         # one line per rule, for LLMs
+    dualect mcp                            # MCP server on stdio
 
 Exit codes: 0 success; 1 verification or validation failed, ``--strict``
 stopped, or an error was reported; 2 bad command-line usage (argparse);
@@ -30,8 +33,11 @@ from dualect.compare import DEFAULT_ATOL, DEFAULT_RTOL, Tolerance
 from dualect.context import build_context
 from dualect.dialect import parse_dialect
 from dualect.errors import DualectError
+from dualect.llmstxt import render_llms_txt
 from dualect.paths import default_rules_dir
 from dualect.pipeline import StrictModeError, translate_file
+from dualect.promotion import check_rules
+from dualect.promotion import report as promotion_report
 from dualect.rulebook import DIRECTIONS, TO_PYTHON, Status, load_rules
 from dualect.scaffold import new_rule
 from dualect.scan import ScanResult, scan_file
@@ -122,6 +128,39 @@ def _rules_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _rules_check(args: argparse.Namespace) -> int:
+    """Handle ``dualect rules check``: does each rule earn its declared status?"""
+    rules = load_rules(rules_dir=args.rules_dir)
+    directions = DIRECTIONS if args.direction == "both" else (args.direction,)
+    results = check_rules(
+        rules=rules,
+        selected=args.rule_ids or None,
+        directions=directions,
+        verify=not args.no_verify,
+    )
+    print(promotion_report(results, verified=not args.no_verify))
+    return EXIT_FAILED if any(check.problem for check in results) else EXIT_OK
+
+
+def _llms_txt(args: argparse.Namespace) -> int:
+    """Handle ``dualect llms-txt``: write (or print) the one-line-per-rule index."""
+    text = render_llms_txt(rules=load_rules(rules_dir=args.rules_dir))
+    if args.output is None:
+        print(text, end="")
+    else:
+        args.output.write_text(text, encoding="utf-8")
+        print(f"wrote {args.output}")
+    return EXIT_OK
+
+
+def _mcp(args: argparse.Namespace) -> int:
+    """Handle ``dualect mcp``: serve the MCP tools on stdio."""
+    from dualect.mcp_server import serve  # deferred: the SDK is only needed here
+
+    serve(rules_dir=args.rules_dir)
+    return EXIT_OK
+
+
 def _rules_new(args: argparse.Namespace) -> int:
     """Handle ``dualect rules new``."""
     rule_dir = new_rule(rules_dir=args.rules_dir, rule_id=args.rule_id)
@@ -207,9 +246,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="which direction --status filters on (default: to-python)",
     )
     listing.set_defaults(handler=_rules_list)
+    check = rule_commands.add_parser(
+        "check",
+        help="run each rule's translator on its cases in each direction; "
+        "fail when a status is not earned (promotion loop)",
+    )
+    check.add_argument("rule_ids", nargs="*", metavar="CATEGORY/ID", help="default: every rule")
+    check.add_argument("--direction", choices=["both", *DIRECTIONS], default="both")
+    check.add_argument(
+        "--no-verify", action="store_true", help="skip execution (layer-2 and completeness only)"
+    )
+    check.set_defaults(handler=_rules_check)
     create = rule_commands.add_parser("new", help="scaffold rules/<category>/<rule-id>/")
     create.add_argument("rule_id", metavar="CATEGORY/ID")
     create.set_defaults(handler=_rules_new)
+
+    llms = commands.add_parser("llms-txt", help="generate llms.txt: every rule in one line")
+    llms.add_argument(
+        "-o", "--output", type=Path, default=None, help="file to write (default: print)"
+    )
+    llms.add_argument("--rules-dir", type=Path, default=None, help=argparse.SUPPRESS)
+    llms.set_defaults(handler=_llms_txt)
+
+    mcp = commands.add_parser(
+        "mcp", help="serve scan/get_rule/translate/verify as MCP tools (stdio)"
+    )
+    mcp.add_argument("--rules-dir", type=Path, default=None, help=argparse.SUPPRESS)
+    mcp.set_defaults(handler=_mcp)
 
     return parser
 

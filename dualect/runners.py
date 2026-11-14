@@ -101,13 +101,14 @@ class MRunner:
         path = path.resolve()
         printed: list[str] = []
         try:
+            # Change directory first: the previous script's folder may have been
+            # a temporary one that is gone now, and Octave refuses to run
+            # anything from a working directory that no longer exists.
+            session.eval(f"cd({_quote_m_string(str(path.parent))});", stream_handler=printed.append)
             # A fresh workspace per script: leftovers from an earlier script
             # (variables or command-line functions) would otherwise leak in.
             session.eval("clear all; close all; more off;", stream_handler=printed.append)
-            session.eval(
-                f"cd({_quote_m_string(str(path.parent))}); source({_quote_m_string(str(path))});",
-                stream_handler=printed.append,
-            )
+            session.eval(f"source({_quote_m_string(str(path))});", stream_handler=printed.append)
             return self._collect(session=session)
         except Oct2PyError as exc:
             raise ExecutionError(side="m", path=path, message=str(exc)) from exc

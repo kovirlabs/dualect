@@ -14,39 +14,16 @@ architecture, the rule format and the milestones.
 
 ## Current state
 
-Milestones 1-4 are done; next is milestone 5 (Python -> Octave via the shared
-IR) in docs/design.md section 11.
-
-- `rules/` — 35 rules in 8 categories; 30 are `mechanical` (a `translate.py`
-  whose output equals every case's hand-written `.py` and verifies against
-  Octave), 5 `guided` (reasons in design.md section 11). Each `rule.yaml` lists
-  the construct tags it covers in `match`. `.m` cases must run on Octave 8 (CI,
-  apt) and 11 (local); `.py` cases are ruff-formatted idiomatic NumPy.
-- `corpus/` — realistic multi-construct scripts run through the whole pipeline.
-- `dualect/cli.py` — `scan`, `context`, `translate`, `verify`, `rules list|new`.
-- Front end: `dualect/source.py` rewrites Octave-only syntax so the MATLAB-only
-  tree-sitter grammar reads it; `dualect/parse.py` parses; `dualect/lower.py`
-  lowers to the shared IR (`dualect/ir.py`), rebuilding operator precedence the
-  grammar gets wrong; `dualect/infer.py` infers shapes and types;
-  `dualect/constructs.py` tags constructs; `dualect/scan.py` maps tags to rules;
-  `dualect/context.py` prints LLM context. Design notes: design.md 5.3.
-- Back end: `dualect/emit.py` plans each statement (all rules mechanical, or a
-  reported hole), dispatches to the rules' translators
-  (`dualect/translators.py`) and owns copy semantics and 0-based position
-  variables; `dualect/pipeline.py` formats (ruff), writes, verifies and
-  reports; `dualect/pyformat.py` also does the layer-2 comparison. Design
-  notes: design.md 5.4.
-- `dualect/rulebook.py` loads rules; `dualect/validate.py` checks them against
-  `dualect/schema/rule.schema.json` plus folder conventions; `dualect/scaffold.py`
-  creates new rule folders (with `TODO` markers the tests reject).
-- `dualect/runners.py` runs `.m` (oct2py, one reused session) and `.py` scripts;
-  `dualect/compare.py` decides value equality; `dualect/verify.py` ties them
-  together. Semantics are in docs/design.md section 12.1.
-- `tests/` — `test_rules.py` (every case pair executed), `test_scan.py`
-  (parsing, Octave dialect, precedence, scanning, context), `test_translate.py`
-  (layer 2 and execution for every mechanical rule, pipeline behavior),
-  `test_corpus.py` (layer 3). Octave tests are `@pytest.mark.octave`.
-- CI: `.github/workflows/tests.yml` (Ubuntu apt Octave, `DUALECT_REQUIRE_OCTAVE=1`).
+Milestones 1-6 of docs/design.md are done. Both directions work end to end:
+`.m` -> Python (dualect/lower.py, infer.py, emit.py; 30 of 35 rules mechanical)
+and Python -> `.m` (dualect/pyinfer.py, lift.py, memit.py; 29 mechanical), one
+rule folder per construct serving both (`from_python:` in rule.yaml, `lift()` in
+translate.py, status per direction). `dualect rules check` enforces that every
+status is earned; `dualect mcp` serves scan/get_rule/translate/verify;
+`llms.txt` is generated (`dualect llms-txt -o llms.txt`) and must stay current.
+Adversarial probes live in tests/test_adversarial.py and tests/test_reverse.py.
+Next: more rules (the guided ones, `cumsum`, `filter`, printing), cell arrays
+and structs.
 
 ## Core ideas to preserve
 
@@ -80,6 +57,8 @@ uv run pytest -m 'not octave'   # only the tests that need no Octave
 uv run ruff check . && uv run ruff format .
 uv run mypy dualect
 uv run python tools/mypy_rules.py   # mypy over rules/**/translate.py
+uv run dualect rules check          # every rule earns its status, both directions
+uv run dualect llms-txt -o llms.txt # after adding or changing a rule
 ```
 
 Octave is needed for execution tests (`brew install octave` on macOS).

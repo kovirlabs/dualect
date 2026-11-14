@@ -22,7 +22,9 @@ result is executed and compared.
 
 ```bash
 uv sync --all-groups                             # install (Python 3.11+, uv)
-uv run pytest                                    # rules, translators, corpus
+uv run pytest                                    # rules, translators, corpus, both directions
+uv run ruff check . && uv run ruff format --check .
+uv run mypy dualect && uv run python tools/mypy_rules.py
 ```
 
 ### `.m` → Python
@@ -65,8 +67,31 @@ later, `max` of data that may hold NaN, and the like (design section 5.5).
 
 ```bash
 uv run dualect rules list [--status guided] [--direction from-python]
+uv run dualect rules check [RULE_ID ...]         # does each rule earn its status, both ways?
 uv run dualect rules new indexing/foo            # scaffold a rule folder
+uv run dualect llms-txt -o llms.txt              # regenerate the one-line-per-rule index
 ```
+
+`rules check` runs every rule's translator on its cases in each direction, compares
+the result with the hand-written target and runs both sides; it fails when a rule
+marked `mechanical` does not qualify, or a `guided` one does (promote it).
+[`llms.txt`](llms.txt) lists every rule in one line for an LLM.
+
+### MCP server
+
+```bash
+uv run dualect mcp                               # stdio; tools: scan, get_rule, translate, verify
+```
+
+A client configuration (Claude Code, Claude Desktop, ...) looks like:
+
+```json
+{"mcpServers": {"dualect": {"command": "uv",
+  "args": ["run", "--directory", "/path/to/dualect", "dualect", "mcp"]}}}
+```
+
+The server gives the client's model the rules and the checks; dualect itself never
+calls an LLM API, and anything the model writes can be checked with `verify`.
 
 `translate`, `verify` and the execution tests need GNU Octave (`brew install octave`,
 `apt install octave`).
