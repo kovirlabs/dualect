@@ -24,6 +24,8 @@ status is earned; `dualect mcp` serves scan/get_rule/translate/verify;
 Adversarial probes live in tests/test_adversarial.py and tests/test_reverse.py.
 Next: more rules (the guided ones, `cumsum`, `filter`, printing), cell arrays
 and structs.
+The project site is `docs/index.html` (GitHub Pages from `/docs`, TagBrush.css);
+keep its numbers in step with README.md and run TagCheck after editing it.
 
 ## Core ideas to preserve
 
