@@ -75,6 +75,25 @@ VERIFIES: dict[str, str] = {
         "cnt = 0;\nfor i = 5:-1:1\n  cnt = cnt + i;\nend\n"
     ),
     "lambda-same-shapes": ("f = @(x) x * x';\nb = [1; 2; 3];\na1 = f(b);\na2 = f(2 * b);\n"),
+    # Printing is compared character for character (`# dualect: stdout`).
+    "printf-formats": (
+        "x = 3.14159;\nfprintf('%#g %#.3e %+05d [% +d] [%-05d]\\n', 2, 3, 4, 3, 3);\n"
+        "fprintf('%e %E %G\\n', 1.5e-300, 2.5e10, 1e-10);\ns = 'abcdef';\n"
+        "fprintf('[%8.3s][%-8.3s]\\n', s, s);\nfprintf('{x} = %d {} 50%%\\n', 3);\n"
+        "fprintf('a\\\\b\\n');\nfprintf(\"tab\\there %d\\n\", 4);\nz = -0;\n"
+        "fprintf('%d|%.1f\\n', z, z);\nn = 2^62;\nfprintf('%d\\n', n);\n"
+        "m = 3 > 2;\nfprintf('%d %f\\n', m, m);\n"
+    ),
+    "printf-recycling": (
+        "A = [1 2; 3 4];\nfprintf('%d,', A);\nfprintf('\\n');\nc = [1; 2; 3];\n"
+        "fprintf('%d\\n', c);\nt = sprintf('%d;', A);\nfor k = 1:3\n"
+        "  printf('%d:%d\\n', k, k^2);\nend\nfprintf('%d %d\\n', 7, 8, 9);\n"
+    ),
+    "filter-forms": (
+        "y1 = filter([1 1], 2, [1 2 3]);\nX = [1 2 3; 4 5 6];\nY = filter(1, [1 -0.5], X);\n"
+        "1;\nfunction y = f(x)\n  y = filter([1 1], 1, x);\nend\na = f([1 2 3]);\n"
+        "b = f([1; 2; 3]);\n"
+    ),
 }
 
 #: Snippets whose given (1-based) line must become a hole, not a guess.
@@ -89,6 +108,20 @@ DECLINES: dict[str, tuple[str, int]] = {
                                 "r = [4 5 6];\no1 = op(b, r);\no2 = op(r, b);\n", 3),
     "mod-by-zero": ("m = mod(-1, 0);\n", 1),
     "empty-loop": ("z = 0;\nfor j = 1:0\n  z = z + 1;\nend\n", 2),
+    # %d of a fraction prints it in another format, not rounded or truncated.
+    "printf-d-of-fraction": ("x = 7 / 2;\nfprintf('%d\\n', x);\n", 2),
+    "printf-s-of-number": ("fprintf('%s\\n', 65);\n", 1),
+    "printf-d-of-string": ("fprintf('%d\\n', 'ab');\n", 1),
+    "printf-file-id": ("fid = 2;\nfprintf(fid, 'x\\n');\n", 2),
+    "printf-hex": ("fprintf('%x\\n', 255);\n", 1),
+    "printf-inf": ("fprintf('%f %g\\n', Inf, -Inf);\n", 1),
+    "printf-huge-integer": ("n = 1e20;\nfprintf('%d\\n', n);\n", 2),
+    "printf-empty-array": ("s = sprintf('x%dy', []);\n", 1),
+    "printf-mixed-array": ("v = [1 2];\nfprintf('%d %d\\n', 3, v);\n", 2),
+    "printf-rows-per-pass": ("A = [1 2 3; 4 5 6];\nfprintf('%d %d %d\\n', A);\n", 2),
+    "disp-of-number": ("disp(0.1)\n", 1),
+    "filter-scalar-data": ("y = filter(2, 1, 5);\n", 1),
+    "filter-state": ("[y, z] = filter([1 1], 1, [1 2 3]);\n", 1),
 }  # fmt: skip
 
 

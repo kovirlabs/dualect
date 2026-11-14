@@ -455,8 +455,17 @@ class _Inferrer:
                 return self.call(node, env)
             case ast.Lambda():
                 return PyInfo(kind=PyKind.FUNC, func=node)
-            case ast.JoinedStr():
+            case ast.JoinedStr(values=values):
+                for piece in values:
+                    if isinstance(piece, ast.FormattedValue):
+                        self.expr(piece.value, env)
                 return PyInfo(kind=PyKind.STRING)
+            case ast.ListComp(elt=elt, generators=[generator]) if not generator.ifs:
+                # One `for` clause: the element is analysed with its target bound.
+                item = self.element(self.expr(generator.iter, env), generator.iter)
+                bound = self.bind(generator.target, item, dict(env), None)
+                self.expr(elt, bound)
+                return PyInfo(kind=PyKind.LIST)
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.expr):
                 self.expr(child, env)
@@ -594,7 +603,15 @@ class _Inferrer:
             return self.numpy_call(name[3:], node, args, keywords)
         if isinstance(func, ast.Attribute):
             receiver = self.expr(func.value, env)
-            return self.method(func.attr, receiver, args, keywords)
+            result = self.method(func.attr, receiver, args, keywords)
+            target = node.args[0] if node.args else None
+            if func.attr == "astype" and isinstance(target, ast.Name):
+                # x.astype(float): the element type is the one named.
+                dtypes = {"float": DType.FLOAT, "bool": DType.BOOL, "int": DType.INT}
+                result = replace(result, dtype=dtypes.get(target.id, DType.UNKNOWN))
+                if target.id == "bool":
+                    result = replace(result, finite=True, nonneg=True)
+            return result
         if isinstance(func, ast.Name):
             fname = func.id
             self.analysis.infos[id(func)] = env.get(fname, UNKNOWN)
@@ -922,6 +939,9 @@ def _builtin(name: str, args: list[PyInfo]) -> PyInfo:
         return scalar(DType.BOOL, nonneg=True)
     if name == "print":
         return PyInfo(kind=PyKind.NONE)
+    if name == "lfilter" and len(args) >= 3:
+        # scipy.signal.lfilter: the shape of the data, in floating point.
+        return replace(_as_array(args[2]), dtype=DType.FLOAT, finite=False, value=None, view=False)
     return UNKNOWN
 
 

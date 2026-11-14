@@ -121,6 +121,9 @@ class LiftContext:
         self.function: ast.FunctionDef | None = None
         self.outputs: list[str] = []
         self.loop_depth = 0
+        #: File-level verification directives the ``.m`` output needs
+        #: (``stdout`` when it prints, ``shape r`` for random values).
+        self.file_directives: list[str] = []
         self._used_comments: set[int] = set()
         self._plan(module.body)
 
@@ -165,6 +168,11 @@ class LiftContext:
     def loc(node: ast.AST) -> ir.Loc:
         """The IR location of a Python node."""
         return loc_of(node)
+
+    def file_directive(self, text: str) -> None:
+        """Ask for a ``% dualect: <text>`` line at the top of the ``.m`` output."""
+        if text not in self.file_directives:
+            self.file_directives.append(text)
 
     def assume(self, text: str) -> None:
         """Record an assumption; it is printed as ``% dualect: assumed ...``."""
@@ -359,17 +367,20 @@ class LiftContext:
         self.assumptions = []
         mark = len(self.reports)
         used = set(self._used_comments)
+        file_directives = list(self.file_directives)
         try:
             lifted = self.translate_statement(stmt)
         except Decline as exc:
             del self.reports[mark:]
             self._used_comments = used
+            self.file_directives = file_directives
             report.status = Status.GUIDED
             report.reason = f"translator declined: {exc.reason}"
             return self.hole(stmt, report)
         except _Unsupported as exc:
             del self.reports[mark:]
             self._used_comments = used
+            self.file_directives = file_directives
             status = Status.UNSUPPORTED
             if exc.rule is not None and exc.rule.python_status is not None:
                 status = exc.rule.python_status
@@ -408,7 +419,9 @@ class LiftContext:
                 return [ir.Comment(loc=loc, text=line.strip()) for line in text.strip().split("\n")]
             case ast.Expr(value=value):
                 return [ir.ExprStmt(loc=loc, value=self.expr(value))]
-            case ast.Import() | ast.Pass():
+            case ast.Import() | ast.ImportFrom() | ast.Pass():
+                # Planning already required a mechanical rule for every module
+                # imported other than numpy (`py:import:scipy.signal`).
                 return []
         tag = _statement_tag(stmt)
         if tag is None:

@@ -31,6 +31,10 @@ EXECUTABLE_ENV = "OCTAVE_EXECUTABLE"
 #: Names never treated as outputs: Octave's implicit result variable.
 _M_IMPLICIT = frozenset({"ans"})
 
+#: The variable that briefly holds a script's printed output (cleared before
+#: the workspace is collected).
+_OUTPUT_VAR = "dualect_printed_output__"
+
 
 @dataclass(frozen=True)
 class CallableValue:
@@ -95,23 +99,40 @@ class MRunner:
             ``bool`` arrays and function handles as :class:`CallableValue`.
         :raises ExecutionError: if Octave reports an error.
         """
+        outputs, _printed = self.run_capturing(path=path)
+        return outputs
+
+    def run_capturing(self, *, path: Path) -> tuple[dict[str, Any], str]:
+        """Like :meth:`run`, and also return what the script printed.
+
+        :param path: the script.
+        :returns: ``(variables, standard output)``; the output text is exact,
+            including a final line without a newline.
+        :raises ExecutionError: if Octave reports an error.
+        """
         from oct2py import Oct2PyError
 
         session = self._ensure_session()
         path = path.resolve()
-        printed: list[str] = []
+        ignored: list[str] = []
         try:
             # Change directory first: the previous script's folder may have been
             # a temporary one that is gone now, and Octave refuses to run
             # anything from a working directory that no longer exists.
-            session.eval(f"cd({_quote_m_string(str(path.parent))});", stream_handler=printed.append)
+            session.eval(f"cd({_quote_m_string(str(path.parent))});", stream_handler=ignored.append)
             # A fresh workspace per script: leftovers from an earlier script
             # (variables or command-line functions) would otherwise leak in.
-            session.eval("clear all; close all; more off;", stream_handler=printed.append)
-            session.eval(f"source({_quote_m_string(str(path))});", stream_handler=printed.append)
-            return self._collect(session=session)
+            session.eval("clear all; close all; more off;", stream_handler=ignored.append)
+            # evalc captures the output exactly; oct2py's own stream drops
+            # trailing spaces and a last line without a newline.
+            source = _quote_m_string(f"source({_quote_m_string(str(path))});")
+            session.eval(f"{_OUTPUT_VAR} = evalc({source});", stream_handler=ignored.append)
+            printed = session.pull(_OUTPUT_VAR)
+            session.eval(f"clear {_OUTPUT_VAR};", stream_handler=ignored.append)
+            outputs = self._collect(session=session)
         except Oct2PyError as exc:
             raise ExecutionError(side="m", path=path, message=str(exc)) from exc
+        return outputs, printed if isinstance(printed, str) else ""
 
     @staticmethod
     def _collect(*, session: Any) -> dict[str, Any]:
@@ -157,17 +178,30 @@ def run_py_script(*, path: Path) -> dict[str, Any]:
     Standard output is captured and discarded so verification output stays clean.
 
     :param path: the script.
-    :returns: variable name -> value. Names starting with ``_``, modules,
-        classes and ``def`` functions are dropped (they are scaffolding, not
-        outputs); lambdas become :class:`CallableValue`.
+    :returns: see :func:`run_py_script_capturing`.
+    :raises ExecutionError: if the script raises.
+    """
+    outputs, _printed = run_py_script_capturing(path=path)
+    return outputs
+
+
+def run_py_script_capturing(*, path: Path) -> tuple[dict[str, Any], str]:
+    """Execute a Python script; return its variables and what it printed.
+
+    :param path: the script.
+    :returns: ``(variables, standard output)``. Variables map name -> value;
+        names starting with ``_``, modules, classes and ``def`` functions are
+        dropped (they are scaffolding, not outputs); lambdas become
+        :class:`CallableValue`.
     :raises ExecutionError: if the script raises.
     """
     path = path.resolve()
     source = path.read_text(encoding="utf-8")
     namespace: dict[str, Any] = {"__name__": "__main__", "__file__": str(path)}
+    printed = io.StringIO()
     try:
         code = compile(source, str(path), "exec")
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(printed):
             exec(code, namespace)
     except Exception as exc:  # any failure of user code is reported, not raised raw
         last = traceback.format_exception_only(exc)[-1].strip()
@@ -184,4 +218,4 @@ def run_py_script(*, path: Path) -> dict[str, Any]:
                 outputs[name] = CallableValue(description="lambda")
             continue
         outputs[name] = value
-    return outputs
+    return outputs, printed.getvalue()

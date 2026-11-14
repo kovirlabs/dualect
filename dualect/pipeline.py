@@ -156,7 +156,12 @@ def translate_scan(
     ctx.enter_script()
     lines = ctx.statements(scan.program.body)
     body = render(lines)
-    imports = "".join(f"{line}\n" for line in sorted(ctx.imports))
+    # isort's order within one section: `import x` lines, then `from x import y`.
+    ordered = sorted(ctx.imports, key=lambda line: (line.startswith("from "), line))
+    imports = "".join(f"{line}\n" for line in ordered)
+    directives = "".join(f"# dualect: {text}\n" for text in ctx.file_directives)
+    if directives:
+        body = f"{directives}\n{body}"
     code = format_python(f"{imports}\n{body}" if imports else body)
     return Translation(
         source_name=scan.source_name,
@@ -202,9 +207,11 @@ def translate_python_text(
     translators = TranslatorSet(rules=rules)
     lifted = lift_python(text=text, name=name, rules=rules, translator_for=translators.get)
     scan = scan_python_text(text=text, name=name, rules=rules)
+    code = memit.program(lifted.body)
+    directives = "".join(f"% dualect: {text}\n" for text in lifted.context.file_directives)
     result = Translation(
         source_name=name,
-        code=memit.program(lifted.body),
+        code=f"{directives}{code}" if directives else code,
         statements=lifted.reports,
         scan=scan,
         rules_used=scan.needed_rules(),

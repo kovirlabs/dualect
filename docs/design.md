@@ -511,6 +511,13 @@ How `dualect verify a.m a.py` and the rule-case tests decide two scripts agree:
   `.m`, 0-based in Python, compared as `m - 1`) and `% dualect: ignore k`
   (e.g. a loop variable whose final value legitimately differs). Unknown
   directives are errors, so a typo cannot silently weaken a check.
+- Printing is compared only on request, `% dualect: stdout`: then the text
+  both scripts print must be identical, character for character (the `.m`
+  side is captured with `evalc`, which keeps trailing spaces and a last line
+  without a newline). Most scripts print incidentally, so it is opt-in; a
+  translation that prints (rule `io/printf`) writes the directive into its
+  output itself. `% dualect: shape r` compares `r` by shape and
+  logical-ness only, for random values (`rand`) that no two runs share.
 - `.m` case scripts that define functions start with `1;` and define them before
   use: Octave does not accept functions at the end of a script.
 - A case file must not be named like a function it calls (`round.m`): the

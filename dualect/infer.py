@@ -758,6 +758,8 @@ class _Inferrer:
             integer = a.integer and b.integer and b.nonneg
             finite = a.finite and b.finite and b.nonneg and b.integer
         value = _fold(op, a, b) if a.is_scalar and b.is_scalar else None
+        if isinstance(value, int | float) and math.isfinite(value):
+            finite = True  # a constant-folded value is known exactly
         keeps_ints = op in ("plus", "minus", "times", "mtimes") or (
             op in ("power", "mpower") and b.integer and b.nonneg
         )
@@ -931,6 +933,12 @@ class _Inferrer:
             )
         if name in ("num2str", "sprintf", "strcat", "upper", "lower", "strtrim"):
             return Info(kind=Kind.STRING, rows=1, elem=Elem.CHAR)
+        if name in ("double", "logical") and len(args) == 1:
+            elem = Elem.REAL if name == "double" else Elem.LOGICAL
+            return replace(first, elem=elem, value=None, func=None, int_dtype=False)
+        if name == "filter" and len(args) >= 3:
+            # The output has the shape of the data (the third argument).
+            return replace(args[2], elem=Elem.REAL, finite=False, value=None, func=None)
         if name in ("cumsum", "cumprod", "sort", "flip", "fliplr", "flipud", "diff"):
             return replace(first, value=None, func=None)
         return UNKNOWN

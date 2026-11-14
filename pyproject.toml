@@ -35,6 +35,9 @@ dependencies = [
     "ruff>=0.8",
     # The official Model Context Protocol SDK, for `dualect mcp` (2.x API: MCPServer).
     "mcp>=2.3,<3",
+    # The translation target for signal processing (docs/design.md section 9):
+    # `filter` becomes scipy.signal.lfilter.
+    "scipy>=1.13",
 ]
 
 [project.scripts]

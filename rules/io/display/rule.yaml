@@ -1,34 +1,30 @@
 id: io/display
-title: "Printing: missing `;`, `disp`, `printf` / `fprintf`"
+title: "Display of results: a missing `;` and `display`"
 status: guided
 dialects: [octave, matlab]
-match: [syntax:display, call:disp, call:display, call:printf, call:fprintf]
-from_python:                  # the Python -> .m direction
-  status: guided
-  match:
-    - py:call:print
-    - py:fstring
+match: [syntax:display, call:display]
 octave: |
   x = 3               % no semicolon: prints "x = 3"
-  disp(x)
-  fprintf('%d items\n', n);
+  y = x / 4           % prints "y = 0.7500"
 python: |
-  print(f"x = {x}")
-  print(x)
-  print(f"{n} items")
+  print(f"x = {x}")   # only if the output was wanted
+  print(f"y = {y:.4f}")
 why: >
-  A statement without a terminating semicolon prints its result, which is easy
-  to leave in by accident; decide whether the output was intended. `disp(x)`
-  is `print(x)`. `printf`/`fprintf` formats look like C's and map to f-strings,
-  but they cycle the format over all elements of array arguments.
+  A statement without a terminating semicolon displays its result, which is
+  easy to leave in by accident: decide whether the output was intended, and
+  usually drop it. When it was, write the print explicitly. The display format
+  depends on the value (`x = 3`, `y = 0.7500`, a matrix as aligned columns with
+  a common scale factor), so there is no one Python expression for it; this
+  rule stays guided. Formatted output is io/printf.
 pitfalls:
   - >-
-    `fprintf('%d\n', [1 2 3])` prints three lines (the format repeats for
-    every element); Python needs an explicit loop or `"\n".join(...)`.
+    Number formatting differs (`y = 0.7500` but Python's `0.75`); compare
+    values, not printed text.
   - >-
-    `fprintf(fid, ...)` with a file id writes to a file: `print(..., file=f)`.
+    A call that returns nothing (`disp(x)`, `fprintf(...)`) displays nothing
+    extra without a semicolon; only results are displayed.
   - >-
-    Number formatting differs (`disp(0.1)` shows `0.1000`); compare values, not
-    printed text.
-related: [syntax/command-syntax]
+    `x` alone on a line (no assignment) displays `x = ...` too, and an
+    expression displays `ans = ...`.
+related: [io/printf, syntax/command-syntax]
 python_imports: []

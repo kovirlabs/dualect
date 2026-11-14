@@ -1,0 +1,40 @@
+id: builtins/filter
+title: "`filter`: one-dimensional digital filter (`scipy.signal.lfilter`)"
+status: mechanical
+dialects: [octave, matlab]
+match: [call:filter]
+from_python:                  # the Python -> .m direction
+  status: mechanical
+  match:
+    - py:import:scipy.signal
+    - py:call:lfilter
+octave: |
+  y = filter(b, a, x);        % b: numerator, a: denominator
+  Y = filter(b, 1, X);        % a matrix: each column is filtered
+python: |
+  from scipy.signal import lfilter
+
+  y = lfilter(b, a, x)
+  Y = lfilter(b, 1, X, axis=0)
+why: >
+  `filter(b, a, x)` computes the difference equation
+  `a(1) y(n) = b(1) x(n) + b(2) x(n-1) + ... - a(2) y(n-1) - ...` with zero
+  initial conditions, which is exactly `scipy.signal.lfilter(b, a, x)`: same
+  argument order, same normalisation by `a(1)`, same output length. They
+  differ in the dimension: `filter` runs down the first non-singleton
+  dimension (the columns of a matrix), `lfilter` along the last axis (the
+  rows), so a matrix needs `axis=0`.
+pitfalls:
+  - >-
+    On a matrix `lfilter` filters each *row* by default; `filter` filters each
+    column. Pass `axis=0`.
+  - >-
+    `[y, zf] = filter(b, a, x, zi)` carries filter state between calls;
+    `lfilter` takes `zi=` and returns `(y, zf)` only when it is given. Its
+    state convention matches, but the call shape differs, so only the
+    three-argument form is translated.
+  - >-
+    NumPy's `np.convolve(x, b)` is the FIR part only and returns
+    `len(x) + len(b) - 1` samples; `filter` keeps `len(x)`.
+related: [builtins/sum-mean-max]
+python_imports: [import numpy as np, from scipy.signal import lfilter]

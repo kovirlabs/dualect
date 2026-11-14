@@ -211,7 +211,17 @@ class Tagger:
             func = node.func
             if isinstance(func, ast.Attribute) and dotted(func, self.alias) is None:
                 self._walk(func.value, uses)  # the receiver of a method
+            joining = isinstance(func, ast.Attribute) and func.attr == "join"
             for arg in node.args:
+                if joining and isinstance(arg, ast.ListComp | ast.GeneratorExp):
+                    # `"".join([... for v in x])` is one construct, the join's:
+                    # only the pieces of the comprehension are tagged.
+                    self._walk(arg.elt, uses)
+                    for generator in arg.generators:
+                        self._walk(generator.iter, uses)
+                        for condition in generator.ifs:
+                            self._walk(condition, uses)
+                    continue
                 self._walk(arg, uses)
             for keyword in node.keywords:
                 self._walk(keyword.value, uses)
